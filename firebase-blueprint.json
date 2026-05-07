@@ -1,0 +1,42 @@
+{
+  "entities": {
+    "Trip": {
+      "title": "Trip",
+      "description": "A curated travel itinerary for a lead.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "tripName": { "type": "string" },
+        "leadId": { "type": "string" },
+        "client": { "type": "object" },
+        "itinerary": { "type": "array" },
+        "pax": { "type": "number" },
+        "startDate": { "type": "string", "format": "date" },
+        "status": { "type": "string", "enum": ["QUOTATION", "CONFIRMED", "ONGOING", "COMPLETED", "CANCELLED"] }
+      },
+      "required": ["id", "tripName", "leadId", "status"]
+    },
+    "User": {
+      "title": "User Profile",
+      "description": "System user with role-based access.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["ADMIN", "USER"] },
+        "name": { "type": "string" }
+      },
+      "required": ["uid", "email", "role"]
+    }
+  },
+  "firestore": {
+    "trips/{tripId}": {
+      "schema": "Trip",
+      "description": "Collection of all travel proposals and active trips."
+    },
+    "users/{userId}": {
+      "schema": "User",
+      "description": "User profiles and metadata."
+    }
+  }
+}

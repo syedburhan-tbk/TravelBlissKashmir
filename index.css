@@ -1,0 +1,31 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Inter:wght@100..900&display=swap');
+
+/* Tailwind will be provided by CDN in index.html, but we can add some base styles here */
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+:root {
+  --luxury-black: #0F1115;
+  --luxury-ivory: #FDFBF7;
+  --luxury-beige: #F5F1E9;
+  --luxury-gold: #C5A059;
+  --luxury-gold-light: #D4B47C;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  background-color: var(--luxury-beige);
+  color: var(--luxury-black);
+}
+
+.font-serif {
+  font-family: 'Playfair Display', serif;
+}
+
+.font-sans {
+  font-family: 'Inter', sans-serif;
+}

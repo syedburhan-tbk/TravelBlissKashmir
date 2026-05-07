@@ -1,0 +1,18 @@
+{
+  "rules": {
+    "quotations": {
+      "$quotationId": {
+        ".read": "true",
+        ".write": "auth != null && auth.token.email.toLowerCase() === 'syd.burhan.smb@gmail.com'"
+      },
+      ".read": "auth != null && auth.token.email.toLowerCase() === 'syd.burhan.smb@gmail.com'",
+      ".write": "auth != null && auth.token.email.toLowerCase() === 'syd.burhan.smb@gmail.com'"
+    },
+    "users": {
+      "$uid": {
+        ".read": "auth != null && ($uid === auth.uid || auth.token.email.toLowerCase() === 'syd.burhan.smb@gmail.com')",
+        ".write": "auth != null && ($uid === auth.uid || auth.token.email.toLowerCase() === 'syd.burhan.smb@gmail.com')"
+      }
+    }
+  }
+}
