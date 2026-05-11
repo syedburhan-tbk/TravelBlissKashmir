@@ -39,29 +39,29 @@ import { MOCK_LEADS, DEFAULT_PERSONAS, BRAND_CONFIG, MOCK_TRIPS } from '../const
 import { sendSimulatedMessage, DEFAULT_TEMPLATES, saveMessageLog } from '../services/messagingService';
 import { safeLocalStorage, STORAGE_KEYS } from '../utils/storage';
 
-const SidebarItem = ({ icon: Icon, label, path, active, roleColor, badge, isCollapsed }: { icon: any, label: string, path: string, active: boolean, roleColor: string, badge?: number, isCollapsed?: boolean }) => (
+const SidebarItem = ({ icon: Icon, label, path, active, badge, isCollapsed }: { icon: any, label: string, path: string, active: boolean, roleColor: string, badge?: number, isCollapsed?: boolean }) => (
   <Link 
     to={path} 
-    className={`flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'} gap-3 px-4 py-2.5 rounded-[12px] transition-all duration-200 ${
-      active ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-400 hover:bg-slate-900/50 hover:text-white'
+    className={`flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'} gap-3 px-4 py-3 rounded-2xl transition-all duration-300 ${
+      active ? 'bg-[#007AFF] text-white shadow-lg shadow-blue-600/20' : 'text-slate-400 hover:bg-white/5 hover:text-white'
     }`}
     title={isCollapsed ? label : ''}
   >
     <div className="flex items-center gap-3">
-      <Icon size={18} strokeWidth={active ? 2.5 : 2} />
-      {!isCollapsed && <span className={`text-[13px] tracking-tight ${active ? 'font-bold' : 'font-medium'}`}>{label}</span>}
+      <Icon size={20} strokeWidth={active ? 2.5 : 2} className={active ? 'text-white' : 'text-slate-400'} />
+      {!isCollapsed && <span className={`text-[14px] tracking-tight ${active ? 'font-bold' : 'font-medium'}`}>{label}</span>}
     </div>
     {!isCollapsed && badge !== undefined && badge > 0 && (
-      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${active ? 'bg-white/20 text-white' : 'bg-[#007AFF] text-white'}`}>{badge}</span>
+      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${active ? 'bg-white/20 text-white' : 'bg-[#007AFF] text-white'}`}>{badge}</span>
     )}
   </Link>
 );
 
 const SidebarHeader = ({ label, isCollapsed }: { label: string, isCollapsed?: boolean }) => (
   isCollapsed ? (
-    <div className="h-px bg-slate-900/50 my-6 mx-2" />
+    <div className="h-px bg-slate-800/50 my-6 mx-2" />
   ) : (
-    <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.15em] mb-2 mt-8 ml-4 opacity-70">{label}</p>
+    <p className="text-slate-500 text-[11px] font-black uppercase tracking-[0.2em] mb-4 mt-8 ml-4 opacity-60">{label}</p>
   )
 );
 
@@ -232,8 +232,8 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const remainingName = agencyName.slice(1).join(' ') || (agencyConfig.name === 'Travel Bliss Kashmir' ? 'BLISS KASHMIR' : '');
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-950">
-      <aside className={`${isSidebarCollapsed ? 'w-20' : 'w-72'} flex flex-col p-4 border-r border-slate-900 transition-all duration-500 ease-in-out relative group/sidebar`}>
+    <div className="flex h-screen overflow-hidden bg-[#0a0a0b]">
+      <aside className={`${isSidebarCollapsed ? 'w-20' : 'w-72'} flex flex-col p-6 bg-[#0a0a0b] border-r border-[#1a1a1b] transition-all duration-500 ease-in-out relative group/sidebar`}>
         <div className={`flex items-center ${isSidebarCollapsed ? 'justify-center' : 'gap-3'} mb-8 mt-2 transition-all`}>
           <div className={`${currentUser.color} p-2 rounded-xl shadow-xl transition-all duration-500 overflow-hidden flex items-center justify-center w-11 h-11 shrink-0`}>
             {agencyConfig.logo ? (
@@ -296,13 +296,13 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           )}
         </nav>
 
-        <div className="mt-auto border-t border-slate-900 pt-6">
+        <div className="mt-auto border-t border-white/5 pt-6">
           <button 
             onClick={signOut}
-            className={`flex items-center ${isSidebarCollapsed ? 'justify-center' : 'gap-3'} px-4 py-3 text-slate-500 hover:text-red-400 transition-colors w-full group`}
+            className={`flex items-center ${isSidebarCollapsed ? 'justify-center' : 'gap-4'} px-4 py-3 text-slate-500 hover:text-white transition-all w-full group rounded-2xl hover:bg-white/5`}
             title={isSidebarCollapsed ? 'Sign Out' : ''}
           >
-            <LogOut size={20} className={`${!isSidebarCollapsed ? 'group-hover:translate-x-1' : ''} transition-transform`} />
+            <LogOut size={20} />
             {!isSidebarCollapsed && <span className="font-bold text-sm">Sign Out</span>}
           </button>
         </div>
