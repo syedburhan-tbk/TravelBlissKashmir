@@ -19,6 +19,8 @@ import { TrendingUp, Users, MapPin, CheckCircle, Target, MessageSquare, Zap, Clo
 import { MOCK_LEADS, MOCK_TRIPS } from '../constants';
 import { LeadStage, LeadScore, Lead } from '../types';
 
+import { safeLocalStorage, STORAGE_KEYS } from '../utils/storage';
+
 const data = [
   { name: 'Jan', leads: 45, bookings: 12 },
   { name: 'Feb', leads: 52, bookings: 15 },
@@ -57,8 +59,16 @@ const StatCard = ({ label, value, icon: Icon, color, trend }: any) => (
 
 const Dashboard: React.FC = () => {
   const leads: Lead[] = useMemo(() => {
-    const saved = localStorage.getItem('et_leads');
-    return saved ? JSON.parse(saved) : MOCK_LEADS;
+    try {
+      const saved = safeLocalStorage.getItem(STORAGE_KEYS.LEADS);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {
+      console.error('Failed to parse leads in Dashboard:', e);
+    }
+    return MOCK_LEADS;
   }, []);
 
   const pendingFollowups = useMemo(() => {

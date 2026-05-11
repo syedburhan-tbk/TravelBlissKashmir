@@ -28,6 +28,8 @@ import {
 import { BRAND_CONFIG } from '../constants';
 import { DEFAULT_TEMPLATES } from '../services/messagingService';
 
+import { safeLocalStorage, STORAGE_KEYS } from '../utils/storage';
+
 // Moved outside to prevent re-mounting on every state change (keystroke)
 const Section = ({ title, icon: Icon, children }: any) => (
   <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-8 animate-in fade-in duration-300">
@@ -44,18 +46,43 @@ const Section = ({ title, icon: Icon, children }: any) => (
 );
 
 const Settings: React.FC = () => {
-  const [config, setConfig] = useState(BRAND_CONFIG);
+  const [config, setConfig] = useState(() => {
+    try {
+      const savedConfig = safeLocalStorage.getItem(STORAGE_KEYS.BRAND_CONFIG);
+      return savedConfig ? JSON.parse(savedConfig) : BRAND_CONFIG;
+    } catch (e) {
+      console.error('Failed to parse brand config:', e);
+      return BRAND_CONFIG;
+    }
+  });
   const [activeTab, setActiveTab] = useState<'agency' | 'messaging'>('agency');
-  const [templates, setTemplates] = useState(DEFAULT_TEMPLATES);
+  const [templates, setTemplates] = useState(() => {
+    try {
+      const savedTemplates = safeLocalStorage.getItem(STORAGE_KEYS.MESSAGE_TEMPLATES);
+      return savedTemplates ? JSON.parse(savedTemplates) : DEFAULT_TEMPLATES;
+    } catch (e) {
+      console.error('Failed to parse message templates:', e);
+      return DEFAULT_TEMPLATES;
+    }
+  });
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
 
   // API Key State
-  const [apiKeys, setApiKeys] = useState({
-    whatsapp: '',
-    sendgrid: '',
-    fromEmail: 'hello@escapetheory.in'
+  const [apiKeys, setApiKeys] = useState(() => {
+    const defaultKeys = {
+      whatsapp: '',
+      sendgrid: '',
+      fromEmail: 'hello@escapetheory.in'
+    };
+    try {
+      const savedKeys = safeLocalStorage.getItem(STORAGE_KEYS.API_KEYS);
+      return savedKeys ? JSON.parse(savedKeys) : defaultKeys;
+    } catch (e) {
+      console.error('Failed to parse API keys:', e);
+      return defaultKeys;
+    }
   });
   
   const [showKeys, setShowKeys] = useState({
@@ -64,15 +91,7 @@ const Settings: React.FC = () => {
   });
 
   useEffect(() => {
-    // Load existing settings from localStorage
-    const savedConfig = localStorage.getItem('et_brand_config');
-    if (savedConfig) setConfig(JSON.parse(savedConfig));
-
-    const savedKeys = localStorage.getItem('et_api_keys');
-    if (savedKeys) setApiKeys(JSON.parse(savedKeys));
-
-    const savedTemplates = localStorage.getItem('et_message_templates');
-    if (savedTemplates) setTemplates(JSON.parse(savedTemplates));
+    // Initialized via useState initializers
   }, []);
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -92,9 +111,9 @@ const Settings: React.FC = () => {
     // Simulate network delay for effect
     await new Promise(resolve => setTimeout(resolve, 800));
 
-    localStorage.setItem('et_brand_config', JSON.stringify(config));
-    localStorage.setItem('et_api_keys', JSON.stringify(apiKeys));
-    localStorage.setItem('et_message_templates', JSON.stringify(templates));
+    safeLocalStorage.setItem(STORAGE_KEYS.BRAND_CONFIG, JSON.stringify(config));
+    safeLocalStorage.setItem(STORAGE_KEYS.API_KEYS, JSON.stringify(apiKeys));
+    safeLocalStorage.setItem(STORAGE_KEYS.MESSAGE_TEMPLATES, JSON.stringify(templates));
 
     // Dispatch global event so other components (Layout, etc) can refresh
     window.dispatchEvent(new Event('et_settings_updated'));

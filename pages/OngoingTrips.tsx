@@ -15,6 +15,8 @@ import {
   PlaneLanding,
   PlaneTakeoff,
   RefreshCcw,
+  Trash2,
+  Edit2,
   Zap,
   Info,
   Calendar,
@@ -30,16 +32,62 @@ import {
 } from 'lucide-react';
 import { MOCK_TRIPS, HOTELS, VEHICLES, ACTIVITIES } from '../constants';
 import { Trip, TripStatus, ItineraryDay, OpsAlert } from '../types';
+import { tripService } from '../services/tripService';
+import { useStorageSync } from '../hooks/useStorageSync';
+import { safeLocalStorage, STORAGE_KEYS } from '../utils/storage';
+
+const StatCard = ({ label, value, icon: Icon, color }: any) => (
+  <div className="bg-white p-6 rounded-[32px] border border-slate-200 shadow-sm flex items-center gap-5">
+    <div className={`${color} p-4 rounded-2xl text-white shadow-lg`}>
+      <Icon size={24} />
+    </div>
+    <div>
+      <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">{label}</p>
+      <p className="text-2xl font-black text-slate-900">{value}</p>
+    </div>
+  </div>
+);
 
 const OngoingTrips: React.FC = () => {
   const navigate = useNavigate();
-  const [trips, setTrips] = useState<Trip[]>([]);
+  const [trips, setTrips] = useState<Trip[]>(() => {
+    const savedTrips = safeLocalStorage.getItem(STORAGE_KEYS.TRIPS);
+    return savedTrips ? JSON.parse(savedTrips) : MOCK_TRIPS;
+  });
+
+  // Sync trips across tabs
+  useStorageSync(STORAGE_KEYS.TRIPS, trips, setTrips, MOCK_TRIPS);
+
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [viewingTrip, setViewingTrip] = useState<Trip | null>(null);
 
+  const deleteTrip = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    console.log('OngoingTrips: Attempting to delete trip with ID:', id);
+    if (window.confirm("Permanently delete this trip from your records? This action cannot be undone.")) {
+      console.log('OngoingTrips: User confirmed deletion for ID:', id);
+      
+      // 1. Delete from Cloud
+      await tripService.deleteTrip(id);
+      
+      // 2. Update Local State & Storage
+      setTrips(prev => {
+        const updated = prev.filter(t => t.id !== id);
+        console.log('OngoingTrips: New trip count:', updated.length);
+        const success = safeLocalStorage.setItem(STORAGE_KEYS.TRIPS, JSON.stringify(updated));
+        if (success) {
+          console.log('OngoingTrips: Successfully updated storage');
+        } else {
+          console.error('OngoingTrips: Failed to update storage');
+          alert('Warning: Could not save changes to local storage. Your storage might be full.');
+        }
+        return updated;
+      });
+    }
+  };
+
   useEffect(() => {
-    const savedTrips = localStorage.getItem('et_trips');
-    setTrips(savedTrips ? JSON.parse(savedTrips) : MOCK_TRIPS);
+    // Initialized via useState initializer
   }, []);
 
   const ongoingTrips = useMemo(() => {
@@ -110,18 +158,6 @@ const OngoingTrips: React.FC = () => {
     return alerts;
   }, [ongoingTrips, selectedDate]);
 
-  const StatCard = ({ label, value, icon: Icon, color }: any) => (
-    <div className="bg-white p-6 rounded-[32px] border border-slate-200 shadow-sm flex items-center gap-5">
-      <div className={`${color} p-4 rounded-2xl text-white shadow-lg`}>
-        <Icon size={24} />
-      </div>
-      <div>
-        <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">{label}</p>
-        <p className="text-2xl font-black text-slate-900">{value}</p>
-      </div>
-    </div>
-  );
-
   const displayDate = new Date(selectedDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
 
   return (
@@ -183,6 +219,20 @@ const OngoingTrips: React.FC = () => {
                                 <h3 className="text-xl font-black text-slate-900">{trip.client.name}</h3>
                              </div>
                              <div className="flex items-center gap-1.5">
+                                <button 
+                                  onClick={(e) => { e.stopPropagation(); navigate(`/trips/${trip.id}`); }}
+                                  className="p-2 bg-slate-50 text-slate-400 hover:text-blue-600 rounded-xl transition-all border border-slate-100"
+                                  title="Edit Trip"
+                                >
+                                  <Edit2 size={16}/>
+                                </button>
+                                <button 
+                                  onClick={(e) => deleteTrip(trip.id, e)}
+                                  className="p-2 bg-slate-50 text-slate-400 hover:text-rose-600 rounded-xl transition-all border border-slate-100"
+                                  title="Delete Trip"
+                                >
+                                  <Trash2 size={16}/>
+                                </button>
                                 <button className="p-2 bg-slate-50 text-slate-500 hover:text-emerald-600 rounded-xl transition-all border border-slate-100"><MessageSquare size={16}/></button>
                                 <button className="p-2 bg-slate-50 text-slate-500 hover:text-blue-600 rounded-xl transition-all border border-slate-100"><Phone size={16}/></button>
                              </div>

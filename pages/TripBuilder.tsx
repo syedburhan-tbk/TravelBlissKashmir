@@ -35,6 +35,7 @@ import {
   Moon,
   Clock,
   RefreshCcw,
+  Repeat,
   Percent,
   Calculator,
   Info,
@@ -52,17 +53,110 @@ import {
   BedDouble,
   Baby,
   ImageIcon,
-  Maximize2
+  Maximize2,
+  Archive
 } from 'lucide-react';
 import { MOCK_TRIPS, HOTELS, VEHICLES, ACTIVITIES, ADD_ONS, DEFAULT_INCLUSIONS, DEFAULT_EXCLUSIONS } from '../constants';
 import { Trip, ItineraryDay, TripVersion, HotelCategory, Hotel, MealPlan, TripStatus, AddOn, Vehicle, HotelTierSelection, TierPrices } from '../types';
 import { generateDayDescription, suggestNextDayTitle } from '../services/geminiService';
 import { tripService } from '../services/tripService';
+import { ItineraryEngine } from '../services/itineraryEngine';
+import { ITINERARY_VARIATIONS } from '../itineraryDatabase';
+import { TripType, DayType } from '../types';
+import { populateItineraryWithRandomImages } from '../services/assetService';
+import { useStorageSync } from '../hooks/useStorageSync';
+import { safeLocalStorage, STORAGE_KEYS } from '../utils/storage';
+
+const generateUniqueId = () => `d-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
 const TripBuilder: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [trip, setTrip] = useState<Trip | null>(null);
+  const [trip, setTrip] = useState<Trip | null>(() => {
+    // We can't use id here if we want it to be fully reactive in useState, 
+    // but we can initialize for the FIRST mount.
+    // However, TripBuilder is a complex page where id usually doesn't change without remount.
+    // Let's grab id from window.location or just use a helper if needed, but useParams() works here too.
+    const tripId = window.location.hash.split('/').pop();
+    if (!tripId || tripId === 'new') return null;
+
+    const savedTrips = safeLocalStorage.getItem(STORAGE_KEYS.TRIPS);
+    let foundTrip: Trip | undefined;
+
+    if (savedTrips) {
+      try {
+        const parsed = JSON.parse(savedTrips);
+        if (Array.isArray(parsed)) {
+          foundTrip = parsed.find((t: Trip) => t.id === tripId);
+        }
+      } catch (e) {
+        console.warn('TripBuilder initializer: Failed to parse trips:', e);
+      }
+    }
+
+    if (!foundTrip) {
+      foundTrip = MOCK_TRIPS.find(t => t.id === tripId);
+    }
+
+    if (foundTrip) {
+      // Fix-up logic (same as in useEffect)
+      // Since masterVehicles/masterHotels are useMemo, we might need to load them here too if we want perfect sync
+      const savedVehicles = safeLocalStorage.getItem(STORAGE_KEYS.VEHICLES);
+      const customVehicles = savedVehicles ? JSON.parse(savedVehicles) : [];
+      const mVehicles = [...VEHICLES, ...(Array.isArray(customVehicles) ? customVehicles : [])];
+
+      const paxCount = foundTrip.pax || 2;
+      let matchedVehicle;
+      if (paxCount <= 3) {
+        matchedVehicle = mVehicles.find(v => v.type?.toLowerCase().includes('sedan') || v.brand?.toLowerCase().includes('sedan') || v.brand?.toLowerCase().includes('etios'));
+      } else if (paxCount <= 7) {
+        matchedVehicle = mVehicles.find(v => v.brand?.toLowerCase().includes('innova') || v.brand?.toLowerCase().includes('ertiga') || v.type?.toLowerCase().includes('suv'));
+      }
+      if (!matchedVehicle) matchedVehicle = mVehicles[0];
+      const defaultVehicleId = matchedVehicle ? matchedVehicle.id : '';
+
+      const updatedItinerary = (foundTrip.itinerary || []).map((day, idx) => {
+        const isDeparture = idx === (foundTrip.itinerary?.length || 0) - 1;
+        return {
+          ...day,
+          vehicleId: day.vehicleId || defaultVehicleId,
+          mealPlan: day.mealPlan || (isDeparture ? undefined : MealPlan.MAP)
+        };
+      });
+
+      return { 
+        ...foundTrip,
+        itinerary: updatedItinerary,
+        startLocation: foundTrip.startLocation || 'Srinagar',
+        dropLocation: foundTrip.dropLocation || foundTrip.startLocation || 'Srinagar',
+        numRooms: foundTrip.numRooms || 1,
+        extraBeds: foundTrip.extraBeds || 0,
+        childNoBed: foundTrip.childNoBed || 0,
+        compChild: foundTrip.compChild || 0,
+        inclusions: foundTrip.inclusions || [...DEFAULT_INCLUSIONS],
+        exclusions: foundTrip.exclusions || [...DEFAULT_EXCLUSIONS],
+        hotelTiers: foundTrip.hotelTiers || [],
+        tierPrices: foundTrip.tierPrices || { signature: 0, elite: 0, prime: 0 },
+        tierMargins: foundTrip.tierMargins || { signature: 15, elite: 15, prime: 15 },
+        versions: foundTrip.versions || []
+      };
+    }
+    return null;
+  });
+
+  const [tripsForSync, setTripsForSync] = useState<Trip[]>([]);
+  useStorageSync(STORAGE_KEYS.TRIPS, tripsForSync, (newTrips) => {
+    setTripsForSync(newTrips);
+    // If our current trip is gone from the main list, redirect
+    if (id && id !== 'new' && newTrips.length > 0) {
+      const stillExists = newTrips.some(t => t.id === id);
+      if (!stillExists) {
+        console.warn('TripBuilder: Current trip was deleted from another tab. Redirecting...');
+        navigate('/trips');
+      }
+    }
+  }, []);
+
   const [activeDayIndex, setActiveDayIndex] = useState(0);
   const [isAiGenerating, setIsAiGenerating] = useState(false);
   const [activeRightTab, setActiveRightTab] = useState<'config' | 'history'>('config');
@@ -71,9 +165,57 @@ const TripBuilder: React.FC = () => {
   const [newInclusion, setNewInclusion] = useState('');
   const [newExclusion, setNewExclusion] = useState('');
   
+  const updateTripInStorage = (updated: Trip) => {
+    try {
+      const savedTrips = safeLocalStorage.getItem(STORAGE_KEYS.TRIPS);
+      let allTrips: Trip[] = [];
+      if (savedTrips) {
+        try {
+          const parsed = JSON.parse(savedTrips);
+          if (Array.isArray(parsed)) allTrips = parsed;
+        } catch (e) {
+          console.warn('updateTripInStorage: Failed to parse trips:', e);
+        }
+      }
+
+      const index = allTrips.findIndex((t: Trip) => t.id === updated.id);
+      if (index !== -1) {
+        allTrips[index] = updated;
+        safeLocalStorage.setItem(STORAGE_KEYS.TRIPS, JSON.stringify(allTrips));
+        tripService.saveTrip(updated).catch(err => {
+           console.warn('Sync to RTDB failed, but local copy is updated:', err);
+        });
+      } else {
+        console.warn('TripBuilder: Attempted to save a trip that is no longer in the master list (possibly deleted).');
+      }
+    } catch (error) {
+      console.error('Failed to save trip update:', error);
+      // Don't crash the UI, but maybe warn the user if it's a quota issue
+      if (error instanceof Error && error.name === 'QuotaExceededError') {
+        alert('Browser storage is full! Please delete some images in the Assets section to free up space.');
+      }
+    }
+  };
+
+  // Auto-save logic
+  useEffect(() => {
+    if (!trip) return;
+    const timeoutId = setTimeout(() => {
+      console.log('Auto-saving trip...');
+      updateTripInStorage(trip);
+    }, 1000);
+    return () => clearTimeout(timeoutId);
+  }, [trip]);
+  
   // Master Library States
-  const [masterInclusions, setMasterInclusions] = useState<string[]>([]);
-  const [masterExclusions, setMasterExclusions] = useState<string[]>([]);
+  const [masterInclusions, setMasterInclusions] = useState<string[]>(() => {
+    const mInc = safeLocalStorage.getItem(STORAGE_KEYS.MASTER_INCLUSIONS);
+    return mInc ? JSON.parse(mInc) : [...DEFAULT_INCLUSIONS];
+  });
+  const [masterExclusions, setMasterExclusions] = useState<string[]>(() => {
+    const mExc = safeLocalStorage.getItem(STORAGE_KEYS.MASTER_EXCLUSIONS);
+    return mExc ? JSON.parse(mExc) : [...DEFAULT_EXCLUSIONS];
+  });
   const [showInclusionLibrary, setShowInclusionLibrary] = useState(false);
   const [showExclusionLibrary, setShowExclusionLibrary] = useState(false);
 
@@ -88,34 +230,168 @@ const TripBuilder: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
 
-  const masterHotels = useMemo(() => {
-    const saved = localStorage.getItem('et_hotels');
-    const custom = saved ? JSON.parse(saved) : [];
-    const combined = [...HOTELS];
-    custom.forEach((ch: Hotel) => {
-      const idx = combined.findIndex(h => h.id === ch.id);
-      if (idx > -1) combined[idx] = ch;
-      else combined.push(ch);
+  // Smart Build State
+  const [isSmartBuildModalOpen, setIsSmartBuildModalOpen] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [matchingVariations, setMatchingVariations] = useState<any[]>([]);
+  const suggestionsRef = useRef<HTMLDivElement>(null);
+
+  const allVariations = useMemo(() => {
+    try {
+      const saved = safeLocalStorage.getItem(STORAGE_KEYS.VARIATIONS);
+      const custom = saved ? JSON.parse(saved) : [];
+      const customIds = new Set(custom.map((v: any) => v.id));
+      const mock = ITINERARY_VARIATIONS.filter(v => !customIds.has(v.id));
+      return [...mock, ...custom];
+    } catch (e) {
+      return ITINERARY_VARIATIONS;
+    }
+  }, []);
+
+  const [smartInput, setSmartInput] = useState({
+    arrivalCity: 'Srinagar',
+    departureCity: 'Srinagar',
+    destinations: ['Pahalgam', 'Gulmarg'],
+    totalDays: 6,
+    budgetLevel: 'elite' as 'prime' | 'elite' | 'signature'
+  });
+
+  const handleSmartBuild = () => {
+    if (!trip) return;
+
+    const variations = ItineraryEngine.buildSmartItinerary({
+      totalDays: smartInput.totalDays,
+      arrivalCity: smartInput.arrivalCity,
+      departureCity: smartInput.departureCity,
+      destinations: smartInput.destinations,
+      budgetLevel: smartInput.budgetLevel,
+      tripType: trip.tripType
     });
-    return combined;
+
+    // Update trip details
+    const newItinerary = variations.map((v, i) => 
+      ItineraryEngine.variationToDay(v, i + 1, smartInput.budgetLevel, trip.vehicleSelection || 'Sedan')
+    );
+
+    setTrip(prev => {
+      if (!prev) return prev;
+      const populatedItinerary = populateItineraryWithRandomImages(newItinerary);
+      return {
+        ...prev,
+        numDays: smartInput.totalDays,
+        startLocation: smartInput.arrivalCity,
+        dropLocation: smartInput.departureCity,
+        itinerary: populatedItinerary
+      };
+    });
+
+    setIsSmartBuildModalOpen(false);
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (suggestionsRef.current && !suggestionsRef.current.contains(event.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleTitleChange = (val: string) => {
+    updateDay(activeDayIndex, { title: val });
+    
+    if (val.trim().length > 0) {
+      const searchLower = val.toLowerCase();
+      const searchTerms = searchLower.split(' ').filter(t => t.length >= 2);
+      
+      const filtered = allVariations.filter((v: any) => {
+        const title = (v.title || '').toLowerCase();
+        const dest = (v.destination || '').toLowerCase();
+        const notes = (v.internalNotes || '').toLowerCase();
+        const customerDesc = (v.customerDescription || '').toLowerCase();
+        const combined = `${title} ${dest} ${notes} ${customerDesc}`;
+        
+        // Match full sequence
+        if (combined.includes(searchLower)) return true;
+        
+        // Match all individual keywords (more flexible)
+        if (searchTerms.length > 0) {
+          return searchTerms.every(term => combined.includes(term));
+        }
+        
+        return false;
+      }).slice(0, 50);
+      
+      setMatchingVariations(filtered);
+      setShowSuggestions(filtered.length > 0);
+    } else {
+      setShowSuggestions(false);
+    }
+  };
+
+  const applyVariation = (v: any) => {
+    updateDay(activeDayIndex, { 
+      title: v.title,
+      clientNotes: v.customerDescription,
+      internalNotes: v.internalNotes,
+      location: v.destination,
+      unionCabSelected: v.transferType === 'Union'
+    });
+    setShowSuggestions(false);
+  };
+
+  const masterHotels = useMemo(() => {
+    try {
+      const saved = safeLocalStorage.getItem(STORAGE_KEYS.HOTELS);
+      let custom: Hotel[] = [];
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) custom = parsed;
+      }
+      const combined = [...HOTELS];
+      custom.forEach((ch: Hotel) => {
+        const idx = combined.findIndex(h => h.id === ch.id);
+        if (idx > -1) combined[idx] = ch;
+        else combined.push(ch);
+      });
+      return combined;
+    } catch (e) {
+      console.error('Failed to parse hotels:', e);
+      return [...HOTELS];
+    }
   }, []);
 
   const masterVehicles = useMemo(() => {
-    const saved = localStorage.getItem('et_vehicles');
-    const custom = saved ? JSON.parse(saved) : [];
-    const combined = [...VEHICLES];
-    custom.forEach((cv: Vehicle) => {
-      const idx = combined.findIndex(v => v.id === cv.id);
-      if (idx > -1) combined[idx] = cv;
-      else combined.push(cv);
-    });
-    return combined;
+    try {
+      const saved = safeLocalStorage.getItem(STORAGE_KEYS.VEHICLES);
+      let custom: Vehicle[] = [];
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) custom = parsed;
+      }
+      const combined = [...VEHICLES];
+      custom.forEach((cv: Vehicle) => {
+        const idx = combined.findIndex(v => v.id === cv.id);
+        if (idx > -1) combined[idx] = cv;
+        else combined.push(cv);
+      });
+      return combined;
+    } catch (e) {
+      console.error('Failed to parse vehicles:', e);
+      return [...VEHICLES];
+    }
   }, []);
 
   const masterAddOns = useMemo(() => {
-    const saved = localStorage.getItem('et_addons');
-    const custom = saved ? JSON.parse(saved) : [];
-    return [...ADD_ONS, ...custom];
+    try {
+      const saved = safeLocalStorage.getItem(STORAGE_KEYS.ADDONS);
+      const custom = saved ? JSON.parse(saved) : [];
+      return [...ADD_ONS, ...(Array.isArray(custom) ? custom : [])];
+    } catch (e) {
+      console.error('Failed to parse addons:', e);
+      return [...ADD_ONS];
+    }
   }, []);
 
   const hotelLocations = useMemo(() => {
@@ -124,54 +400,58 @@ const TripBuilder: React.FC = () => {
   }, [masterHotels]);
 
   useEffect(() => {
-    const savedTrips = localStorage.getItem('et_trips');
-    let foundTrip: Trip | undefined;
-
-    if (savedTrips) {
-      const parsed = JSON.parse(savedTrips);
-      foundTrip = parsed.find((t: Trip) => t.id === id);
+    const tripIdFromUrl = id || window.location.hash.split('/').pop();
+    // Re-verify trip if id changes or if it was not loaded initially
+    if (!trip || trip.id !== tripIdFromUrl) {
+       const savedTrips = safeLocalStorage.getItem(STORAGE_KEYS.TRIPS);
+       let foundTrip: Trip | undefined;
+       if (savedTrips) {
+         try {
+           const parsed = JSON.parse(savedTrips);
+           if (Array.isArray(parsed)) foundTrip = parsed.find((t: Trip) => t.id === tripIdFromUrl);
+         } catch (e) {
+            console.warn('TripBuilder sync: Failed to parse trips:', e);
+          }
+       }
+       if (!foundTrip) foundTrip = MOCK_TRIPS.find(t => t.id === tripIdFromUrl);
+       if (foundTrip) {
+         Promise.resolve().then(() => setTrip(foundTrip));
+       }
     }
-
-    if (!foundTrip) {
-      foundTrip = MOCK_TRIPS.find(t => t.id === id);
-    }
-
-    if (foundTrip) {
-      setTrip({ 
-        ...foundTrip, 
-        startLocation: foundTrip.startLocation || 'Srinagar',
-        numRooms: foundTrip.numRooms || 1,
-        extraBeds: foundTrip.extraBeds || 0,
-        childNoBed: foundTrip.childNoBed || 0,
-        compChild: foundTrip.compChild || 0,
-        inclusions: foundTrip.inclusions || [...DEFAULT_INCLUSIONS],
-        exclusions: foundTrip.exclusions || [...DEFAULT_EXCLUSIONS],
-        hotelTiers: foundTrip.hotelTiers || [],
-        tierPrices: foundTrip.tierPrices || { signature: 0, elite: 0, prime: 0 },
-        tierMargins: foundTrip.tierMargins || { signature: 15, elite: 15, prime: 15 },
-        versions: foundTrip.versions || []
-      });
-    }
-
-    const mInc = localStorage.getItem('et_master_inclusions');
-    const mExc = localStorage.getItem('et_master_exclusions');
-    setMasterInclusions(mInc ? JSON.parse(mInc) : [...DEFAULT_INCLUSIONS]);
-    setMasterExclusions(mExc ? JSON.parse(mExc) : [...DEFAULT_EXCLUSIONS]);
-
-    // Initial cloud sync check
-    if (foundTrip) {
-      tripService.saveTrip(foundTrip);
-    }
-  }, [id]);
+  }, [id, trip]);
 
   useEffect(() => {
     if (trip) {
-      const savedTrips = localStorage.getItem('et_trips');
-      let allTrips: Trip[] = savedTrips ? JSON.parse(savedTrips) : [...MOCK_TRIPS];
-      const index = allTrips.findIndex(t => t.id === trip.id);
-      if (index > -1) allTrips[index] = trip;
-      else allTrips.push(trip);
-      localStorage.setItem('et_trips', JSON.stringify(allTrips));
+      try {
+        const savedTrips = safeLocalStorage.getItem(STORAGE_KEYS.TRIPS);
+        let allTrips: Trip[] = [];
+        try {
+          if (savedTrips) {
+            const parsed = JSON.parse(savedTrips);
+            if (Array.isArray(parsed)) allTrips = parsed;
+          } else {
+            allTrips = [...MOCK_TRIPS];
+          }
+        } catch (e) {
+          allTrips = [...MOCK_TRIPS];
+        }
+
+        const index = allTrips.findIndex(t => t.id === trip.id);
+        if (index > -1) allTrips[index] = trip;
+        else allTrips.push(trip);
+        
+        // Limit total trips or their versions to save space
+        const limitedTrips = allTrips.map(t => {
+          if (t.id === trip.id && t.versions && t.versions.length > 5) {
+            return { ...t, versions: t.versions.slice(0, 5) };
+          }
+          return t;
+        });
+
+        safeLocalStorage.setItem(STORAGE_KEYS.TRIPS, JSON.stringify(limitedTrips));
+      } catch (e) {
+        console.error('Failed to auto-save trip:', e);
+      }
     }
   }, [trip]);
 
@@ -260,6 +540,20 @@ const TripBuilder: React.FC = () => {
       let addOnsCost = 0;
       let jammuSurcharge = 0;
       let regionalCabCost = 0;
+      let oneWaySurcharge = 0;
+
+      if (trip.startLocation && trip.dropLocation && trip.startLocation !== trip.dropLocation) {
+        let hasTraveler = false;
+        trip.itinerary.forEach(day => {
+          if (day.vehicleId) {
+            const vehicle = masterVehicles.find(v => v.id === day.vehicleId);
+            if (vehicle && vehicle.type.toLowerCase().includes('traveler')) {
+              hasTraveler = true;
+            }
+          }
+        });
+        oneWaySurcharge = hasTraveler ? 4000 : 3000;
+      }
 
       const roomsCount = trip.numRooms || 1;
       const ebCount = trip.extraBeds || 0;
@@ -303,7 +597,7 @@ const TripBuilder: React.FC = () => {
         }
       });
 
-      const subtotal = hotelCost + vehicleCost + jammuSurcharge + activityCost + addOnsCost + regionalCabCost;
+      const subtotal = hotelCost + vehicleCost + jammuSurcharge + activityCost + addOnsCost + regionalCabCost + oneWaySurcharge;
       const marginPct = trip.tierMargins?.[tier] ?? 15;
       const margin = subtotal * (marginPct / 100);
       
@@ -321,8 +615,6 @@ const TripBuilder: React.FC = () => {
     };
   }, [trip, masterHotels, masterVehicles, masterAddOns]);
 
-  const generateUniqueId = () => `d-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
   const remapItinerary = (itinerary: ItineraryDay[]) => {
     return itinerary.map((day, i) => ({
       ...day,
@@ -334,6 +626,27 @@ const TripBuilder: React.FC = () => {
     if (!trip) return;
     const newItinerary = [...trip.itinerary];
     newItinerary[index] = { ...newItinerary[index], ...updates };
+
+    if (index === 0 && updates.vehicleId !== undefined) {
+      for (let i = 1; i < newItinerary.length; i++) {
+        newItinerary[i] = { ...newItinerary[i], vehicleId: updates.vehicleId };
+      }
+    }
+
+    setTrip({ ...trip, itinerary: newItinerary });
+  };
+
+  const applyHotelCategoryToAllDays = (category: HotelCategory) => {
+    if (!trip) return;
+    const newItinerary = [...trip.itinerary];
+    newItinerary.forEach((day, idx) => {
+      if (idx === newItinerary.length - 1) return;
+      const loc = day.location || masterHotels.find(h => h.id === day.hotelId)?.location || 'Srinagar';
+      const hotelMatch = masterHotels.find(h => h.location === loc && h.category === category);
+      if (hotelMatch) {
+        day.hotelId = hotelMatch.id;
+      }
+    });
     setTrip({ ...trip, itinerary: newItinerary });
   };
 
@@ -505,6 +818,14 @@ const TripBuilder: React.FC = () => {
     setTrip({ ...trip, inclusions: (trip.inclusions || []).filter((_, i) => i !== idx) });
   };
 
+  const swapInToEx = (idx: number) => {
+    if (!trip) return;
+    const item = trip.inclusions[idx];
+    const newInclusions = trip.inclusions.filter((_, i) => i !== idx);
+    const newExclusions = [...(trip.exclusions || []), item];
+    setTrip({ ...trip, inclusions: newInclusions, exclusions: newExclusions });
+  };
+
   const addExclusion = () => {
     if (!trip || !newExclusion.trim()) return;
     setTrip({ ...trip, exclusions: [...(trip.exclusions || []), newExclusion.trim()] });
@@ -521,6 +842,14 @@ const TripBuilder: React.FC = () => {
   const removeExclusion = (idx: number) => {
     if (!trip) return;
     setTrip({ ...trip, exclusions: (trip.exclusions || []).filter((_, i) => i !== idx) });
+  };
+
+  const swapExToIn = (idx: number) => {
+    if (!trip) return;
+    const item = trip.exclusions[idx];
+    const newExclusions = trip.exclusions.filter((_, i) => i !== idx);
+    const newInclusions = [...(trip.inclusions || []), item];
+    setTrip({ ...trip, inclusions: newInclusions, exclusions: newExclusions });
   };
 
   const syncWithMaster = (type: 'inclusions' | 'exclusions') => {
@@ -596,12 +925,55 @@ const TripBuilder: React.FC = () => {
     setTimeout(() => setCopiedLink(false), 2000);
   };
 
+  const handleSaveAsTemplate = () => {
+    if (!trip) return;
+    const templateName = prompt("Enter a name for this new template:", `${trip.tripName} Template`);
+    if (!templateName) return;
+
+    const dayCount = trip.itinerary.length;
+    const durationStr = dayCount <= 0 ? '0 Days' : dayCount === 1 ? '1 Day' : `${dayCount} Days, ${dayCount - 1} Nights`;
+
+    const newTemplate: TripTemplate = {
+      id: `temp-${Date.now()}`,
+      name: templateName,
+      duration: durationStr,
+      tripType: trip.tripType,
+      baseMargin: trip.tierMargins?.signature || 15,
+      itinerary: trip.itinerary.map(day => ({
+        ...day,
+        id: `d-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      })),
+      inclusions: [...(trip.inclusions || [])],
+      exclusions: [...(trip.exclusions || [])],
+      startLocation: trip.startLocation,
+      dropLocation: trip.dropLocation || trip.startLocation,
+    };
+
+    const savedTemplatesRaw = safeLocalStorage.getItem(STORAGE_KEYS.TEMPLATES);
+    const savedTemplates: TripTemplate[] = savedTemplatesRaw ? JSON.parse(savedTemplatesRaw) : [];
+    savedTemplates.push(newTemplate);
+    safeLocalStorage.setItem(STORAGE_KEYS.TEMPLATES, JSON.stringify(savedTemplates));
+    
+    alert(`Template "${templateName}" saved successfully!`);
+    navigate('/templates');
+  };
+
   const handleNavigateToProposal = async () => {
     if (!trip) return;
     setIsSaving(true);
     await tripService.saveTrip(trip);
     setIsSaving(false);
     navigate(`/quotation/${trip.id}`);
+  };
+
+  const handleRefreshVisuals = () => {
+    if (!trip) return;
+    if (window.confirm('Update all day images randomly from the assets database?')) {
+      const updated = populateItineraryWithRandomImages(trip.itinerary);
+      const updatedTrip = { ...trip, itinerary: updated };
+      setTrip(updatedTrip);
+      updateTripInStorage(updatedTrip);
+    }
   };
 
   if (!trip) return <div className="p-20 text-center text-slate-400 font-black uppercase tracking-widest">LOADING BUILDER...</div>;
@@ -635,6 +1007,18 @@ const TripBuilder: React.FC = () => {
                   >
                     <option value="Srinagar">Srinagar Start</option>
                     <option value="Jammu">Jammu Start (+₹1k/Day)</option>
+                  </select>
+               </div>
+               <span className="w-1 h-1 bg-slate-200 rounded-full"/>
+               <div className="flex items-center gap-1.5 bg-slate-50 px-2 py-0.5 rounded-full border border-slate-100">
+                  <MapIcon size={12} className="text-slate-400" />
+                  <select 
+                    className="bg-transparent text-[10px] font-black uppercase text-slate-600 outline-none cursor-pointer"
+                    value={trip.dropLocation || trip.startLocation}
+                    onChange={(e) => setTrip({ ...trip, dropLocation: e.target.value as 'Srinagar' | 'Jammu' })}
+                  >
+                    <option value="Srinagar">Srinagar Drop</option>
+                    <option value="Jammu">Jammu Drop</option>
                   </select>
                </div>
             </div>
@@ -693,11 +1077,26 @@ const TripBuilder: React.FC = () => {
              </div>
           </div>
           <button 
+            onClick={handleRefreshVisuals}
+            className="p-4 bg-indigo-50 text-indigo-600 rounded-2xl hover:bg-indigo-100 transition-all shadow-sm border border-indigo-100"
+            title="Refresh Destination Assets"
+          >
+            <ImageIcon size={20} />
+          </button>
+          <button 
             onClick={() => setIsVersionModalOpen(true)}
             className="p-4 bg-slate-100 text-slate-600 rounded-2xl hover:bg-blue-50 hover:text-blue-600 transition-all shadow-sm"
             title="Save as Version"
           >
             <FileClock size={20} />
+          </button>
+          <button 
+            onClick={handleSaveAsTemplate}
+            disabled={isSaving}
+            className="bg-white border-2 border-slate-200 text-slate-700 px-6 py-4 rounded-2xl font-black uppercase tracking-widest text-xs flex items-center gap-3 shadow-sm hover:border-slate-300 transition-all active:scale-95 disabled:opacity-50"
+          >
+            <Archive size={18} />
+            SAVE TEMPLATE
           </button>
           <button 
             onClick={handleCopyProposalLink}
@@ -721,12 +1120,34 @@ const TripBuilder: React.FC = () => {
 
       <div className="grid grid-cols-12 gap-8 flex-1 overflow-hidden">
         <div className="col-span-12 lg:col-span-3 space-y-6 overflow-y-auto pr-2">
-           <div className="bg-white border border-slate-200 rounded-[32px] p-6 shadow-sm flex flex-col h-fit">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 flex items-center gap-2">
-                   <CalendarDays size={16} className="text-blue-600" /> Trip Steps
-                </h3>
-              </div>
+            {/* AI Enhancement Section */}
+            <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-[32px] p-6 shadow-xl shadow-blue-900/10 text-white overflow-hidden relative group">
+               <div className="relative z-10 space-y-4">
+                 <div className="flex items-center gap-2">
+                   <div className="p-2 bg-white/20 rounded-xl backdrop-blur-md">
+                     <Sparkles size={20} className="text-white" />
+                   </div>
+                   <h2 className="text-sm font-black uppercase tracking-widest">Intelligent Engine</h2>
+                 </div>
+                 <p className="text-[10px] font-bold text-blue-100 leading-relaxed">
+                   Auto-select best route flow, avoid backtracking, and add seasonal curated experiences.
+                 </p>
+                 <button 
+                   onClick={() => setIsSmartBuildModalOpen(true)}
+                   className="w-full py-3 bg-white text-blue-600 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-lg hover:bg-blue-50 transition-all active:scale-95 flex items-center justify-center gap-2"
+                 >
+                   Open Smart Builder
+                 </button>
+               </div>
+               <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 bg-white/10 rounded-full blur-3xl group-hover:bg-white/20 transition-all duration-700"></div>
+            </div>
+
+            <div className="bg-white border border-slate-200 rounded-[32px] p-6 shadow-sm flex flex-col h-fit">
+               <div className="flex items-center justify-between mb-6">
+                 <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 flex items-center gap-2">
+                    <CalendarDays size={16} className="text-blue-600" /> Trip Steps
+                 </h3>
+               </div>
               <div className="space-y-4">
                 {trip.itinerary.map((day, idx) => {
                   const hotel = masterHotels.find(h => h.id === day.hotelId);
@@ -743,7 +1164,15 @@ const TripBuilder: React.FC = () => {
                         }`}
                       >
                         <div className="flex justify-between items-center">
-                          <span className={`text-[9px] font-black uppercase tracking-widest ${isSelected ? 'text-blue-100' : 'text-blue-600'}`}>Day {day.dayNumber}</span>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-[9px] font-black uppercase tracking-widest ${isSelected ? 'text-blue-100' : 'text-blue-600'}`}>Day {day.dayNumber}</span>
+                            {day.images && day.images.length > 0 && (
+                              <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-black ${isSelected ? 'bg-white/20 text-white' : 'bg-indigo-50 text-indigo-600'}`}>
+                                <ImageIcon size={8} />
+                                {day.images.length}
+                              </div>
+                            )}
+                          </div>
                           <div className="flex gap-1.5">
                              {stayInfo && !isDayLast && (
                                 <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded flex items-center gap-1 ${isSelected ? 'bg-white/20 text-white' : 'bg-amber-50 text-amber-600'}`}>
@@ -844,11 +1273,41 @@ const TripBuilder: React.FC = () => {
                    <div className="relative group">
                      <input 
                        type="text" 
-                       value={trip.itinerary[activeDayIndex].title}
-                       onChange={(e) => updateDay(activeDayIndex, { title: e.target.value })}
+                       value={trip.itinerary[activeDayIndex].title || ''}
+                       onChange={(e) => handleTitleChange(e.target.value)}
+                       onFocus={() => {
+                         if (trip.itinerary[activeDayIndex].title.trim().length > 0) setShowSuggestions(true);
+                       }}
                        className="w-full px-8 py-6 bg-blue-50/30 border-2 border-blue-100 rounded-3xl text-2xl font-black text-slate-900 focus:bg-white focus:ring-4 focus:ring-blue-50 transition-all outline-none shadow-sm"
-                       placeholder="Enter day title..."
+                       placeholder="Enter day title (e.g. Pahalgam)..."
                      />
+                     
+                     {showSuggestions && (
+                       <div 
+                         ref={suggestionsRef}
+                         className="absolute left-0 right-0 top-full mt-2 bg-white rounded-3xl shadow-2xl border border-slate-100 p-3 z-[150] animate-in slide-in-from-top-2 duration-200"
+                       >
+                         <div className="flex items-center gap-2 px-3 pb-2 mb-2 border-b border-slate-50">
+                            <Sparkles size={14} className="text-blue-600" />
+                            <span className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em]">Smart Recommendations</span>
+                         </div>
+                         <div className="space-y-1">
+                           {matchingVariations.map((v) => (
+                             <button
+                               key={v.id}
+                               onClick={() => applyVariation(v)}
+                               className="w-full flex items-center justify-between p-4 rounded-2xl hover:bg-slate-50 text-left transition-colors group/item"
+                             >
+                               <div>
+                                 <p className="text-sm font-bold text-slate-900">{v.title}</p>
+                                 <p className="text-[10px] font-bold text-blue-500 uppercase tracking-widest">{v.destination} • {v.dayType}</p>
+                               </div>
+                               <ChevronRight size={16} className="text-slate-200 group-hover/item:text-blue-500 group-hover/item:translate-x-1 transition-all" />
+                             </button>
+                           ))}
+                         </div>
+                       </div>
+                     )}
                    </div>
                 </div>
 
@@ -1087,7 +1546,7 @@ const TripBuilder: React.FC = () => {
                    <div className="space-y-6">
                       <div className="space-y-1">
                          <div className="flex justify-between items-center px-1">
-                            <label className="text-[10px] font-black uppercase text-slate-400">Signature</label>
+                            <label className="text-[10px] font-black uppercase text-slate-400">Elite Signature</label>
                             <span className="text-[8px] font-bold text-slate-500">Sug: ₹{tieredCosts.signature.suggested.toLocaleString()}</span>
                          </div>
                          <input 
@@ -1099,7 +1558,7 @@ const TripBuilder: React.FC = () => {
                       </div>
                       <div className="space-y-1">
                          <div className="flex justify-between items-center px-1">
-                            <label className="text-[10px] font-black uppercase text-blue-400">Elite (Recommended)</label>
+                            <label className="text-[10px] font-black uppercase text-blue-400">Elite Premier</label>
                             <span className="text-[8px] font-black text-blue-300">Sug: ₹{tieredCosts.elite.suggested.toLocaleString()}</span>
                          </div>
                          <input 
@@ -1111,7 +1570,7 @@ const TripBuilder: React.FC = () => {
                       </div>
                       <div className="space-y-1">
                          <div className="flex justify-between items-center px-1">
-                            <label className="text-[10px] font-black uppercase text-amber-500">Prime (Luxury)</label>
+                            <label className="text-[10px] font-black uppercase text-amber-500">Elite Prime</label>
                             <span className="text-[8px] font-black text-amber-300">Sug: ₹{tieredCosts.prime.suggested.toLocaleString()}</span>
                          </div>
                          <input 
@@ -1196,7 +1655,7 @@ const TripBuilder: React.FC = () => {
                           {masterInclusions.map((item, idx) => (
                             <button 
                               key={idx} 
-                              onClick={() => { setTrip({...trip, inclusions: [...trip.inclusions, item]}); setShowInclusionLibrary(false); }}
+                              onClick={() => { if(trip) setTrip({...trip, inclusions: [...(trip.inclusions || []), item]}); setShowInclusionLibrary(false); }}
                               className="w-full text-left p-2.5 bg-white/5 hover:bg-white/10 rounded-xl text-[10px] font-bold text-slate-300 transition-all flex items-center justify-between group"
                             >
                                <span className="flex-1 truncate mr-2">{item}</span>
@@ -1216,7 +1675,10 @@ const TripBuilder: React.FC = () => {
                                 className="flex-1 text-[10px] font-bold text-slate-600 bg-emerald-50 p-3 rounded-xl outline-none focus:ring-2 focus:ring-emerald-200 resize-none overflow-hidden"
                                 rows={2}
                               />
-                              <button onClick={() => removeInclusion(i)} className="p-2 text-slate-300 hover:text-rose-500 transition-all mt-1"><Trash2 size={14}/></button>
+                              <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button onClick={() => swapInToEx(i)} className="p-2 text-slate-300 hover:text-blue-500 transition-all" title="Move to Exclusions"><Repeat size={14}/></button>
+                                <button onClick={() => removeInclusion(i)} className="p-2 text-slate-300 hover:text-rose-500 transition-all"><Trash2 size={14}/></button>
+                              </div>
                           </div>
                         ))}
                         <div className="flex gap-2 pt-2">
@@ -1239,14 +1701,14 @@ const TripBuilder: React.FC = () => {
                       </div>
                     </div>
 
-                    {showInclusionLibrary && (
+                    {showExclusionLibrary && (
                       <div className="bg-slate-900 p-4 rounded-2xl space-y-3 animate-in slide-in-from-top-2">
                         <p className="text-[8px] font-black uppercase text-slate-500 tracking-widest px-1">Master Database Exclusions</p>
                         <div className="max-h-40 overflow-y-auto space-y-2 custom-scrollbar pr-2">
                           {masterExclusions.map((item, idx) => (
                             <button 
                               key={idx} 
-                              onClick={() => { setTrip({...trip, exclusions: [...trip.exclusions, item]}); setShowExclusionLibrary(false); }}
+                              onClick={() => { if(trip) setTrip({...trip, exclusions: [...(trip.exclusions || []), item]}); setShowExclusionLibrary(false); }}
                               className="w-full text-left p-2.5 bg-white/5 hover:bg-white/10 rounded-xl text-[10px] font-bold text-slate-300 transition-all flex items-center justify-between group"
                             >
                                <span className="flex-1 truncate mr-2">{item}</span>
@@ -1266,7 +1728,10 @@ const TripBuilder: React.FC = () => {
                                 className="flex-1 text-[10px] font-bold text-slate-600 bg-rose-50 p-3 rounded-xl outline-none focus:ring-2 focus:ring-rose-200 resize-none overflow-hidden"
                                 rows={2}
                               />
-                              <button onClick={() => removeExclusion(i)} className="p-2 text-slate-300 hover:text-rose-500 transition-all mt-1"><Trash2 size={14}/></button>
+                              <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button onClick={() => swapExToIn(i)} className="p-2 text-slate-300 hover:text-blue-500 transition-all" title="Move to Inclusions"><Repeat size={14}/></button>
+                                <button onClick={() => removeExclusion(i)} className="p-2 text-slate-300 hover:text-rose-500 transition-all"><Trash2 size={14}/></button>
+                              </div>
                           </div>
                         ))}
                         <div className="flex gap-2 pt-2">
@@ -1284,6 +1749,13 @@ const TripBuilder: React.FC = () => {
              <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
                 <div className="bg-white border-2 border-blue-600 rounded-[32px] p-6 shadow-sm space-y-8">
                    <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-600 flex items-center gap-2"><Trophy size={16} /> Tier Hotel Config</h3>
+                  <div className="space-y-2 border-b border-slate-100 pb-4">
+                     <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Global Hotel Auto-Select</p>
+                     <div className="grid grid-cols-2 gap-2">
+                        <button onClick={() => applyHotelCategoryToAllDays(HotelCategory.BUDGET)} className="py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[10px] font-black transition-all shadow-sm active:scale-95">Select 3 Star (Budget)</button>
+                        <button onClick={() => applyHotelCategoryToAllDays(HotelCategory.DELUXE)} className="py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[10px] font-black transition-all shadow-sm active:scale-95">Select 4 Star (Deluxe)</button>
+                     </div>
+                  </div>
                    {itineraryLocations.map(location => {
                      const selection = trip.hotelTiers?.find(t => t.location === location) || { signatureHotelId: '', eliteHotelId: '', primeHotelId: '' };
                      const locHotels = masterHotels.filter(h => h.location === location);
@@ -1294,21 +1766,21 @@ const TripBuilder: React.FC = () => {
                           <p className="text-[9px] font-black uppercase text-slate-900 bg-slate-100 px-2 py-1 rounded w-fit">{location}</p>
                           <div className="space-y-3">
                              <div className="space-y-1">
-                                <label className="text-[8px] font-black text-slate-400 uppercase">Signature</label>
+                                <label className="text-[8px] font-black text-slate-400 uppercase">Elite Signature</label>
                                 <select value={selection.signatureHotelId} onChange={e => updateTierSelection(location, 'signature', e.target.value)} className="w-full p-2 bg-slate-50 border rounded-xl text-[10px] font-bold outline-none">
                                    <option value="">Select Signature...</option>
                                    {locHotels.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
                                 </select>
                              </div>
                              <div className="space-y-1">
-                                <label className="text-[8px] font-black text-blue-500 uppercase">Elite</label>
+                                <label className="text-[8px] font-black text-blue-500 uppercase">Elite Premier</label>
                                 <select value={selection.eliteHotelId} onChange={e => updateTierSelection(location, 'elite', e.target.value)} className="w-full p-2 bg-blue-50 border border-blue-100 rounded-xl text-[10px] font-black outline-none text-blue-900">
                                    <option value="">Select Elite...</option>
                                    {locHotels.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
                                 </select>
                              </div>
                              <div className="space-y-1">
-                                <label className="text-[8px] font-black text-amber-500 uppercase">Prime</label>
+                                <label className="text-[8px] font-black text-amber-500 uppercase">Elite Prime</label>
                                 <select value={selection.primeHotelId} onChange={e => updateTierSelection(location, 'prime', e.target.value)} className="w-full p-2 bg-amber-50 border border-amber-100 rounded-xl text-[10px] font-bold outline-none">
                                    <option value="">Select Prime...</option>
                                    {locHotels.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
@@ -1411,6 +1883,153 @@ const TripBuilder: React.FC = () => {
                  </div>
               </form>
            </div>
+        </div>
+      )}
+
+      {/* Smart Build Modal */}
+      {isSmartBuildModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-[32px] w-full max-w-2xl shadow-2xl overflow-hidden border border-white/20">
+            <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-gradient-to-r from-blue-600 to-indigo-600">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-white/20 rounded-2xl backdrop-blur-md">
+                  <Sparkles className="text-white" size={24} />
+                </div>
+                <div>
+                  <h2 className="text-xl font-black text-white">Smart Itinerary Builder</h2>
+                  <p className="text-blue-100 text-xs font-bold uppercase tracking-widest opacity-80">Dynamic Route Optimization</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsSmartBuildModalOpen(false)}
+                className="p-2 hover:bg-white/10 rounded-xl transition-colors text-white"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className="p-8 space-y-8 max-h-[70vh] overflow-y-auto">
+              <div className="grid grid-cols-3 gap-6">
+                <div className="space-y-3">
+                   <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest flex items-center gap-2">
+                     <Clock size={12} className="text-blue-500" /> Duration
+                   </label>
+                   <div className="flex items-center gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                     <input 
+                       type="number" 
+                       min="1"
+                       max="15"
+                       value={smartInput.totalDays}
+                       onChange={(e) => setSmartInput({...smartInput, totalDays: parseInt(e.target.value) || 1})}
+                       className="bg-transparent font-black text-xl text-slate-900 w-full outline-none"
+                     />
+                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Days</span>
+                   </div>
+                </div>
+                <div className="space-y-3">
+                   <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest flex items-center gap-2">
+                     <PlaneTakeoff size={12} className="text-blue-500" /> Arrival
+                   </label>
+                   <select 
+                     value={smartInput.arrivalCity}
+                     onChange={(e) => setSmartInput({...smartInput, arrivalCity: e.target.value})}
+                     className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-black text-xs text-slate-900 shadow-sm outline-none"
+                   >
+                     <option value="Srinagar">Srinagar</option>
+                     <option value="Jammu">Jammu</option>
+                     <option value="Katra">Katra</option>
+                   </select>
+                </div>
+                <div className="space-y-3">
+                   <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest flex items-center gap-2">
+                     <PlaneTakeoff size={12} className="text-blue-500 rotate-180" /> Drop City
+                   </label>
+                   <select 
+                     value={smartInput.departureCity}
+                     onChange={(e) => setSmartInput({...smartInput, departureCity: e.target.value})}
+                     className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-black text-xs text-slate-900 shadow-sm outline-none"
+                   >
+                     <option value="Srinagar">Srinagar</option>
+                     <option value="Jammu">Jammu</option>
+                     <option value="Katra">Katra</option>
+                   </select>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest flex items-center gap-2">
+                   <MapPin size={12} className="text-blue-500" /> Select Destinations
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {['Gulmarg', 'Pahalgam', 'Sonamarg', 'Dhoodpathri', 'Yusmarg', 'Gurez', 'Patnitop'].map(dest => {
+                    const isSelected = smartInput.destinations.includes(dest);
+                    return (
+                      <button
+                        key={dest}
+                        onClick={() => {
+                          const newDests = isSelected 
+                            ? smartInput.destinations.filter(d => d !== dest)
+                            : [...smartInput.destinations, dest];
+                          setSmartInput({...smartInput, destinations: newDests});
+                        }}
+                        className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border-2 ${
+                          isSelected 
+                            ? 'bg-blue-600 border-blue-600 text-white shadow-md' 
+                            : 'bg-white border-slate-100 text-slate-400 hover:border-slate-300'
+                        }`}
+                      >
+                        {dest}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest flex items-center gap-2">
+                   <Crown size={12} className="text-amber-500" /> Luxury Tier Logic
+                </label>
+                <div className="grid grid-cols-3 gap-6">
+                  {(['prime', 'elite', 'signature'] as const).map(tier => {
+                    const isSelected = smartInput.budgetLevel === tier;
+                    return (
+                      <button
+                        key={tier}
+                        onClick={() => setSmartInput({...smartInput, budgetLevel: tier})}
+                        className={`p-6 rounded-3xl text-left transition-all border-2 flex flex-col gap-2 ${
+                          isSelected 
+                            ? 'bg-amber-50 border-amber-500 shadow-xl shadow-amber-900/5' 
+                            : 'bg-white border-slate-100 hover:border-slate-200'
+                        }`}
+                      >
+                        <div className={`p-2 w-fit rounded-lg ${isSelected ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                           {tier === 'signature' && <Crown size={16} />}
+                           {tier === 'elite' && <Trophy size={16} />}
+                           {tier === 'prime' && <Award size={16} />}
+                        </div>
+                        <span className={`text-xs font-black uppercase tracking-widest ${isSelected ? 'text-amber-700' : 'text-slate-400'}`}>{tier}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div className="p-8 bg-slate-50 flex gap-4">
+               <button 
+                 onClick={() => setIsSmartBuildModalOpen(false)}
+                 className="flex-1 py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl font-black uppercase tracking-widest text-[10px]"
+               >
+                 Cancel
+               </button>
+               <button 
+                 onClick={handleSmartBuild}
+                 className="flex-[2] py-4 bg-blue-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl shadow-blue-900/20 hover:bg-blue-700 transition-all active:scale-95"
+               >
+                 Build Intelligent Flow
+               </button>
+            </div>
+          </div>
         </div>
       )}
 

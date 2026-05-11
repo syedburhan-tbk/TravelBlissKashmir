@@ -6,6 +6,7 @@ import {
   ShieldCheck, 
   XCircle, 
   RotateCcw, 
+  Repeat,
   Save, 
   CheckCircle2, 
   Info,
@@ -15,25 +16,29 @@ import {
 } from 'lucide-react';
 import { DEFAULT_INCLUSIONS, DEFAULT_EXCLUSIONS } from '../constants';
 
+import { safeLocalStorage, STORAGE_KEYS } from '../utils/storage';
+
 const MasterTerms: React.FC = () => {
-  const [inclusions, setInclusions] = useState<string[]>([]);
-  const [exclusions, setExclusions] = useState<string[]>([]);
+  const [inclusions, setInclusions] = useState<string[]>(() => {
+    const savedInc = safeLocalStorage.getItem(STORAGE_KEYS.MASTER_INCLUSIONS);
+    return savedInc ? JSON.parse(savedInc) : [...DEFAULT_INCLUSIONS];
+  });
+  const [exclusions, setExclusions] = useState<string[]>(() => {
+    const savedExc = safeLocalStorage.getItem(STORAGE_KEYS.MASTER_EXCLUSIONS);
+    return savedExc ? JSON.parse(savedExc) : [...DEFAULT_EXCLUSIONS];
+  });
   const [newInclusion, setNewInclusion] = useState('');
   const [newExclusion, setNewExclusion] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
 
   useEffect(() => {
-    const savedInc = localStorage.getItem('et_master_inclusions');
-    const savedExc = localStorage.getItem('et_master_exclusions');
-    
-    setInclusions(savedInc ? JSON.parse(savedInc) : [...DEFAULT_INCLUSIONS]);
-    setExclusions(savedExc ? JSON.parse(savedExc) : [...DEFAULT_EXCLUSIONS]);
+    // Already initialized via useState initializer
   }, []);
 
   const handleSave = () => {
-    localStorage.setItem('et_master_inclusions', JSON.stringify(inclusions));
-    localStorage.setItem('et_master_exclusions', JSON.stringify(exclusions));
+    safeLocalStorage.setItem(STORAGE_KEYS.MASTER_INCLUSIONS, JSON.stringify(inclusions));
+    safeLocalStorage.setItem(STORAGE_KEYS.MASTER_EXCLUSIONS, JSON.stringify(exclusions));
     setShowSuccess(true);
     setTimeout(() => setShowSuccess(false), 2000);
   };
@@ -60,6 +65,18 @@ const MasterTerms: React.FC = () => {
       setInclusions(inclusions.filter((_, i) => i !== index));
     } else {
       setExclusions(exclusions.filter((_, i) => i !== index));
+    }
+  };
+
+  const swapItem = (type: 'inclusion' | 'exclusion', index: number) => {
+    if (type === 'inclusion') {
+      const item = inclusions[index];
+      setInclusions(inclusions.filter((_, i) => i !== index));
+      setExclusions([...exclusions, item]);
+    } else {
+      const item = exclusions[index];
+      setExclusions(exclusions.filter((_, i) => i !== index));
+      setInclusions([...inclusions, item]);
     }
   };
 
@@ -98,7 +115,7 @@ const MasterTerms: React.FC = () => {
            type="text" 
            placeholder="Search across all master terms..." 
            className="w-full pl-14 pr-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold text-slate-900 focus:bg-white focus:ring-8 focus:ring-blue-50 transition-all"
-           value={searchTerm}
+           value={searchTerm || ''}
            onChange={(e) => setSearchTerm(e.target.value)}
          />
       </div>
@@ -125,7 +142,7 @@ const MasterTerms: React.FC = () => {
                   type="text" 
                   placeholder="Type a new standard inclusion..."
                   className="flex-1 px-6 py-4 bg-white/10 border border-white/20 rounded-2xl outline-none font-bold placeholder:text-emerald-200 text-sm focus:bg-white/20 transition-all"
-                  value={newInclusion}
+                  value={newInclusion || ''}
                   onChange={(e) => setNewInclusion(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && addItem('inclusion')}
                 />
@@ -143,12 +160,21 @@ const MasterTerms: React.FC = () => {
               <div key={idx} className="flex items-center gap-4 p-5 bg-slate-50 border border-slate-100 rounded-3xl group hover:border-emerald-200 hover:bg-emerald-50/30 transition-all">
                 <div className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
                 <p className="flex-1 text-sm font-bold text-slate-700 leading-snug">{item}</p>
-                <button 
-                  onClick={() => removeItem('inclusion', idx)}
-                  className="p-2 text-slate-300 hover:text-rose-500 transition-colors"
-                >
-                  <Trash2 size={16} />
-                </button>
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button 
+                    onClick={() => swapItem('inclusion', inclusions.indexOf(item))}
+                    className="p-2 text-slate-300 hover:text-blue-500 transition-colors"
+                    title="Move to Exclusions"
+                  >
+                    <Repeat size={16} />
+                  </button>
+                  <button 
+                    onClick={() => removeItem('inclusion', inclusions.indexOf(item))}
+                    className="p-2 text-slate-300 hover:text-rose-500 transition-colors"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
               </div>
             ))}
             {filteredInclusions.length === 0 && (
@@ -181,7 +207,7 @@ const MasterTerms: React.FC = () => {
                   type="text" 
                   placeholder="Type a new standard exclusion..."
                   className="flex-1 px-6 py-4 bg-white/5 border border-white/10 rounded-2xl outline-none font-bold placeholder:text-slate-500 text-sm focus:bg-white/10 transition-all"
-                  value={newExclusion}
+                  value={newExclusion || ''}
                   onChange={(e) => setNewExclusion(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && addItem('exclusion')}
                 />
@@ -199,12 +225,21 @@ const MasterTerms: React.FC = () => {
               <div key={idx} className="flex items-center gap-4 p-5 bg-slate-50 border border-slate-100 rounded-3xl group hover:border-blue-200 hover:bg-slate-100/50 transition-all">
                 <div className="w-2 h-2 rounded-full bg-slate-400 shrink-0" />
                 <p className="flex-1 text-sm font-bold text-slate-700 leading-snug">{item}</p>
-                <button 
-                  onClick={() => removeItem('exclusion', idx)}
-                  className="p-2 text-slate-300 hover:text-rose-500 transition-colors"
-                >
-                  <Trash2 size={16} />
-                </button>
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button 
+                    onClick={() => swapItem('exclusion', exclusions.indexOf(item))}
+                    className="p-2 text-slate-300 hover:text-blue-500 transition-colors"
+                    title="Move to Inclusions"
+                  >
+                    <Repeat size={16} />
+                  </button>
+                  <button 
+                    onClick={() => removeItem('exclusion', exclusions.indexOf(item))}
+                    className="p-2 text-slate-300 hover:text-rose-500 transition-colors"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
               </div>
             ))}
             {filteredExclusions.length === 0 && (

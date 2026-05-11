@@ -4,10 +4,12 @@ import {
   set, 
   get, 
   child,
+  remove,
   serverTimestamp
 } from 'firebase/database';
 import { rtdb, auth } from '../lib/firebase';
 import { Trip } from '../types';
+import { safeLocalStorage, STORAGE_KEYS } from '../utils/storage';
 
 enum OperationType {
   CREATE = 'create',
@@ -48,12 +50,35 @@ function handleDatabaseError(error: unknown, operationType: OperationType, path:
 
 const QUOTATIONS_PATH = 'quotations';
 
+/**
+ * Recursively removes undefined values from an object to ensure it's safe for Firebase RTDB.
+ */
+function deepClean(obj: any): any {
+  if (obj === null || typeof obj !== 'object') {
+    return obj;
+  }
+
+  if (Array.isArray(obj)) {
+    return obj.map(v => deepClean(v));
+  }
+
+  const newObj: any = {};
+  Object.keys(obj).forEach(key => {
+    const val = obj[key];
+    if (val !== undefined) {
+      newObj[key] = deepClean(val);
+    }
+  });
+  return newObj;
+}
+
 export const tripService = {
   async saveTrip(trip: Trip) {
     try {
       const tripRef = ref(rtdb, `${QUOTATIONS_PATH}/${trip.id}`);
+      const cleanedTrip = deepClean(trip);
       await set(tripRef, {
-        ...trip,
+        ...cleanedTrip,
         lastUpdated: serverTimestamp(),
         sharedAt: serverTimestamp(),
       });
@@ -70,11 +95,17 @@ export const tripService = {
   async getTrip(id: string): Promise<Trip | null> {
     try {
       // 1. Try local storage first (for the editor)
-      const cached = localStorage.getItem('et_trips');
+      const cached = safeLocalStorage.getItem(STORAGE_KEYS.TRIPS);
       if (cached) {
-        const trips = JSON.parse(cached);
-        const found = trips.find((t: Trip) => t.id === id);
-        if (found) return found;
+        try {
+          const trips = JSON.parse(cached);
+          if (Array.isArray(trips)) {
+            const found = trips.find((t: Trip) => t.id === id);
+            if (found) return found;
+          }
+        } catch (e) {
+          console.error('Failed to parse cached trips:', e);
+        }
       }
 
       // 2. Try RTDB (for the client or secondary device)
@@ -98,8 +129,8 @@ export const tripService = {
   async getLeadsTrips(leadId: string): Promise<Trip[]> {
     try {
       // For RTDB, we'd typically use a query or fetch all and filter client-side for simplicity in this demo
-      const dbRef = ref(rtdb);
-      const snapshot = await get(child(dbRef, QUOTATIONS_PATH));
+      const dbRef = ref(rtdb, QUOTATIONS_PATH);
+      const snapshot = await get(dbRef);
       
       if (snapshot.exists()) {
         const allQuots = snapshot.val();
@@ -109,6 +140,20 @@ export const tripService = {
     } catch (error) {
       console.error("Error fetching lead trips from RTDB:", error);
       return [];
+    }
+  },
+
+  async deleteTrip(id: string) {
+    try {
+      const tripRef = ref(rtdb, `${QUOTATIONS_PATH}/${id}`);
+      await remove(tripRef);
+      return true;
+    } catch (error: any) {
+      if (error?.code === 'PERMISSION_DENIED') {
+        handleDatabaseError(error, OperationType.DELETE, `${QUOTATIONS_PATH}/${id}`);
+      }
+      console.error("Error deleting trip from RTDB:", error);
+      return false;
     }
   }
 };

@@ -25,40 +25,23 @@ import {
 import { VEHICLES } from '../constants';
 import { Vehicle } from '../types';
 
+import { safeLocalStorage, STORAGE_KEYS } from '../utils/storage';
+
 const Vehicles: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [capacityFilter, setCapacityFilter] = useState('All');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [viewingVehicle, setViewingVehicle] = useState<Vehicle | null>(null);
   const [editingVehicleId, setEditingVehicleId] = useState<string | null>(null);
-  const [customVehicles, setCustomVehicles] = useState<Vehicle[]>([]);
-  const imageInputRef = useRef<HTMLInputElement>(null);
-
-  const initialFormState: Partial<Vehicle> = {
-    type: '',
-    brand: '',
-    model: '',
-    capacity: 4,
-    ratePerDay: 2500,
-    isAC: true,
-    fuelType: 'Diesel',
-    image: '',
-    features: [],
-    providerName: '',
-    providerContact: '',
-    internalNotes: '',
-    rateValidityDate: '',
-  };
-
-  const [formData, setFormData] = useState<Partial<Vehicle>>(initialFormState);
-
-  // Load from localStorage on mount
-  useEffect(() => {
-    const saved = localStorage.getItem('et_vehicles');
-    if (saved) {
-      setCustomVehicles(JSON.parse(saved));
+  const [customVehicles, setCustomVehicles] = useState<Vehicle[]>(() => {
+    try {
+      const saved = safeLocalStorage.getItem(STORAGE_KEYS.VEHICLES);
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      console.error('Failed to parse custom vehicles:', e);
+      return [];
     }
-  }, []);
+  });
 
   const allVehicles = useMemo(() => {
     const customIds = new Set(customVehicles.map(v => v.id));
@@ -122,7 +105,7 @@ const Vehicles: React.FC = () => {
     }
 
     setCustomVehicles(updated);
-    localStorage.setItem('et_vehicles', JSON.stringify(updated));
+    safeLocalStorage.setItem(STORAGE_KEYS.VEHICLES, JSON.stringify(updated));
     setIsModalOpen(false);
   };
 
@@ -130,7 +113,7 @@ const Vehicles: React.FC = () => {
     if (window.confirm("Delete this vehicle from your inventory?")) {
       const updated = customVehicles.filter(v => v.id !== id);
       setCustomVehicles(updated);
-      localStorage.setItem('et_vehicles', JSON.stringify(updated));
+      safeLocalStorage.setItem(STORAGE_KEYS.VEHICLES, JSON.stringify(updated));
     }
   };
 
@@ -480,7 +463,7 @@ const Vehicles: React.FC = () => {
                       type="text" 
                       placeholder="e.g. Innova Crysta Zx"
                       className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-black text-slate-900 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                      value={formData.type}
+                      value={formData.type || ''}
                       onChange={e => setFormData({...formData, type: e.target.value})}
                     />
                   </div>
@@ -490,7 +473,7 @@ const Vehicles: React.FC = () => {
                       type="text" 
                       placeholder="e.g. Toyota"
                       className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-black text-slate-900 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                      value={formData.brand}
+                      value={formData.brand || ''}
                       onChange={e => setFormData({...formData, brand: e.target.value})}
                     />
                   </div>
@@ -500,7 +483,7 @@ const Vehicles: React.FC = () => {
                       required
                       type="number" 
                       className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-black text-slate-900 outline-none"
-                      value={formData.capacity}
+                      value={formData.capacity || 0}
                       onChange={e => setFormData({...formData, capacity: parseInt(e.target.value)})}
                     />
                   </div>
@@ -510,7 +493,7 @@ const Vehicles: React.FC = () => {
                       required
                       type="number" 
                       className="w-full px-5 py-3.5 bg-blue-50 border border-blue-100 rounded-2xl text-sm font-black text-blue-900 outline-none"
-                      value={formData.ratePerDay}
+                      value={formData.ratePerDay || 0}
                       onChange={e => setFormData({...formData, ratePerDay: parseInt(e.target.value)})}
                     />
                   </div>
@@ -528,7 +511,7 @@ const Vehicles: React.FC = () => {
                       type="text" 
                       placeholder="e.g. In-House / Vendor Name"
                       className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-900 outline-none"
-                      value={formData.providerName}
+                      value={formData.providerName || ''}
                       onChange={e => setFormData({...formData, providerName: e.target.value})}
                     />
                   </div>
@@ -538,7 +521,7 @@ const Vehicles: React.FC = () => {
                       type="text" 
                       placeholder="+91..."
                       className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-900 outline-none"
-                      value={formData.providerContact}
+                      value={formData.providerContact || ''}
                       onChange={e => setFormData({...formData, providerContact: e.target.value})}
                     />
                   </div>
@@ -548,7 +531,7 @@ const Vehicles: React.FC = () => {
                       rows={3}
                       placeholder="e.g. Brand new 2024 model, luggage carrier included."
                       className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-3xl text-sm font-medium text-slate-900 outline-none resize-none transition-all focus:ring-2 focus:ring-blue-500"
-                      value={formData.internalNotes}
+                      value={formData.internalNotes || ''}
                       onChange={e => setFormData({...formData, internalNotes: e.target.value})}
                     />
                   </div>

@@ -1,5 +1,6 @@
 
 import { Lead, MessageTemplate, MessageLog, ChannelSettings, LeadActivity } from '../types';
+import { safeLocalStorage, STORAGE_KEYS } from '../utils/storage';
 
 export const DEFAULT_TEMPLATES: MessageTemplate[] = [
   {
@@ -60,14 +61,31 @@ export async function sendSimulatedMessage(lead: Lead, template: MessageTemplate
 }
 
 export function saveMessageLog(log: MessageLog) {
-  const saved = localStorage.getItem('et_message_logs');
-  const logs = saved ? JSON.parse(saved) : [];
-  localStorage.setItem('et_message_logs', JSON.stringify([log, ...logs]));
+  try {
+    const saved = safeLocalStorage.getItem(STORAGE_KEYS.MESSAGE_LOGS);
+    let logs: MessageLog[] = [];
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed)) logs = parsed;
+    }
+    // Maintain a rotating log of 100 messages to prevent storage bloat
+    const updated = [log, ...logs].slice(0, 100);
+    safeLocalStorage.setItem(STORAGE_KEYS.MESSAGE_LOGS, JSON.stringify(updated));
+  } catch (e) {
+    console.error('Failed to save message log:', e);
+  }
 }
 
 export function getMessageLogsForLead(leadId: string): MessageLog[] {
-  const saved = localStorage.getItem('et_message_logs');
-  if (!saved) return [];
-  const logs: MessageLog[] = JSON.parse(saved);
-  return logs.filter(l => l.leadId === leadId);
+  try {
+    const saved = safeLocalStorage.getItem(STORAGE_KEYS.MESSAGE_LOGS);
+    if (!saved) return [];
+    const logs = JSON.parse(saved);
+    if (Array.isArray(logs)) {
+      return logs.filter(l => l.leadId === leadId);
+    }
+  } catch (e) {
+    console.error('Failed to get message logs:', e);
+  }
+  return [];
 }

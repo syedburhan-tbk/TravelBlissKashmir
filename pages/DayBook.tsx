@@ -36,14 +36,34 @@ import {
 import { Transaction, TransactionType, Trip } from '../types';
 import { MOCK_TRIPS, BRAND_CONFIG } from '../constants';
 
+import { safeLocalStorage, STORAGE_KEYS } from '../utils/storage';
+
 const TRANSACTION_CATEGORIES = {
   INCOME: ['Client Advance', 'Final Payment', 'Misc Revenue', 'Incentive', 'Refund Recieved'],
   EXPENSE: ['Hotel Payout', 'Driver Payment', 'Activity Booking', 'Office Rent', 'Electricity', 'Internet', 'Marketing', 'Salary', 'Stationery', 'Tea/Meals', 'Fuel Cost', 'Misc Expense']
 };
 
+const generateTxId = () => `tx-${Math.floor(Math.random() * 1000000000)}`;
+
 const DayBook: React.FC = () => {
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [allTrips, setAllTrips] = useState<Trip[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>(() => {
+    try {
+      const saved = safeLocalStorage.getItem(STORAGE_KEYS.DAYBOOK);
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      console.error('Failed to parse daybook:', e);
+      return [];
+    }
+  });
+  const [allTrips, setAllTrips] = useState<Trip[]>(() => {
+    try {
+      const savedTrips = safeLocalStorage.getItem(STORAGE_KEYS.TRIPS);
+      return savedTrips ? JSON.parse(savedTrips) : MOCK_TRIPS;
+    } catch (e) {
+      console.error('Failed to parse trips in DayBook:', e);
+      return MOCK_TRIPS;
+    }
+  });
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -68,17 +88,10 @@ const DayBook: React.FC = () => {
     receiptName: ''
   });
 
-  useEffect(() => {
-    const saved = localStorage.getItem('et_daybook');
-    if (saved) setTransactions(JSON.parse(saved));
-
-    const savedTrips = localStorage.getItem('et_trips');
-    setAllTrips(savedTrips ? JSON.parse(savedTrips) : MOCK_TRIPS);
-  }, []);
 
   const saveTransactions = (updated: Transaction[]) => {
     setTransactions(updated);
-    localStorage.setItem('et_daybook', JSON.stringify(updated));
+    safeLocalStorage.setItem(STORAGE_KEYS.DAYBOOK, JSON.stringify(updated));
   };
 
   const filteredTransactions = useMemo(() => {
@@ -134,7 +147,7 @@ const DayBook: React.FC = () => {
     e.preventDefault();
     const txData: Transaction = {
       ...formData,
-      id: editingId || `tx-${Date.now()}`,
+      id: editingId || generateTxId(),
       date: selectedDate,
       author: formData.author || 'Adil Bakshi',
       type: formData.type as TransactionType,
@@ -568,7 +581,7 @@ const DayBook: React.FC = () => {
                             rows={6} 
                             className="w-full p-8 bg-white border-2 border-slate-200 rounded-[32px] font-medium text-sm text-slate-900 outline-none focus:ring-4 focus:ring-blue-100 transition-all shadow-sm resize-none" 
                             placeholder="Add narrative context for this ledger entry..."
-                            value={formData.description}
+                            value={formData.description || ''}
                             onChange={(e) => setFormData({...formData, description: e.target.value})}
                           />
                        </div>

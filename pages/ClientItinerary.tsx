@@ -35,6 +35,7 @@ import {
   DEFAULT_EXCLUSIONS
 } from '../constants';
 import { Trip, HotelCategory } from '../types';
+import { safeLocalStorage, STORAGE_KEYS } from '../utils/storage';
 
 import { tripService } from '../services/tripService';
 import { useAuth } from '../contexts/AuthContext';
@@ -46,7 +47,10 @@ const ClientItinerary: React.FC = () => {
   const [trip, setTrip] = useState<Trip | null>(null);
   const [loading, setLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [agencyConfig, setAgencyConfig] = useState(BRAND_CONFIG);
+  const [agencyConfig, setAgencyConfig] = useState(() => {
+    const saved = safeLocalStorage.getItem(STORAGE_KEYS.BRAND_CONFIG);
+    return saved ? JSON.parse(saved) : BRAND_CONFIG;
+  });
   const [copied, setCopied] = useState(false);
   const printableRef = useRef<HTMLDivElement>(null);
 
@@ -71,19 +75,16 @@ const ClientItinerary: React.FC = () => {
     };
 
     fetchTrip();
-
-    const savedConfig = localStorage.getItem('et_brand_config');
-    if (savedConfig) setAgencyConfig(JSON.parse(savedConfig));
   }, [id]);
 
   const masterHotels = useMemo(() => {
-    const saved = localStorage.getItem('et_hotels');
+    const saved = safeLocalStorage.getItem(STORAGE_KEYS.HOTELS);
     const custom = saved ? JSON.parse(saved) : [];
     return [...HOTELS, ...custom];
   }, []);
 
   const masterVehicles = useMemo(() => {
-    const saved = localStorage.getItem('et_vehicles');
+    const saved = safeLocalStorage.getItem(STORAGE_KEYS.VEHICLES);
     const custom = saved ? JSON.parse(saved) : [];
     return [...VEHICLES, ...custom];
   }, []);
@@ -146,6 +147,17 @@ const ClientItinerary: React.FC = () => {
     }, 500);
   };
 
+  const itineraryLocations = useMemo(() => {
+    if (!trip || !Array.isArray(trip.itinerary)) return [];
+    const locs: string[] = [];
+    trip.itinerary.slice(0, -1).forEach(day => {
+       if (!day) return;
+       const loc = day.location || masterHotels.find(h => h.id === day.hotelId)?.location || 'Srinagar';
+       if (!locs.includes(loc)) locs.push(loc);
+    });
+    return locs;
+  }, [trip, masterHotels]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0F1115] flex flex-col items-center justify-center gap-6">
@@ -176,15 +188,22 @@ const ClientItinerary: React.FC = () => {
     );
   }
 
-  const durationDays = trip.itinerary.length;
+  const durationDays = trip.itinerary?.length || 0;
   const durationNights = Math.max(0, durationDays - 1);
-  const regularPrice = trip.tierPrices?.prime || 0;
-  const proposalPrice = trip.tierPrices?.signature || trip.tierPrices?.elite || regularPrice;
+  
+  const tiers = [
+    { id: 'signature', name: 'Elite Signature', price: trip.tierPrices?.signature || 0, color: 'text-slate-400', bg: 'bg-slate-50 border-slate-200' },
+    { id: 'elite', name: 'Elite Premier', price: trip.tierPrices?.elite || 0, color: 'text-blue-400', bg: 'bg-blue-50 border-blue-200' },
+    { id: 'prime', name: 'Elite Prime', price: trip.tierPrices?.prime || 0, color: 'text-amber-500', bg: 'bg-amber-50 border-amber-200' },
+  ].filter(t => t.price > 0);
+
+  const proposalPrice = tiers.length > 0 ? tiers[0].price : 0;
+  const regularPrice = proposalPrice * 1.15; // Fallback for decorative discount
 
   const getDayHotel = (hotelId: string | undefined) => masterHotels.find(h => h.id === hotelId);
 
-  // Cinematic images for Kashmir
-  const heroImage = "https://images.unsplash.com/photo-1598305072042-430b3554e7f3?auto=format&fit=crop&q=80&w=2000";
+  // Pick a cinematic image for hero (from first day if possible)
+  const heroImage = (trip.itinerary && trip.itinerary[0]?.images?.[0]) || "https://images.unsplash.com/photo-1598305072042-430b3554e7f3?auto=format&fit=crop&q=80&w=2000";
   
   return (
     <div className="bg-[#F5F1E9] min-h-screen text-[#0F1115] font-sans selection:bg-[#C5A059]/30">
@@ -243,7 +262,7 @@ const ClientItinerary: React.FC = () => {
         </div>
       </div>
 
-      <div className="max-w-5xl mx-auto flex flex-col items-center" ref={printableRef}>
+      <div className="max-w-screen-2xl mx-auto flex flex-col items-center" ref={printableRef}>
         
         {/* 1. HERO COVER PAGE */}
         <section className="relative w-full h-[100vh] flex flex-col justify-end overflow-hidden">
@@ -265,7 +284,7 @@ const ClientItinerary: React.FC = () => {
             <div className="max-w-4xl">
               <p className="text-[#C5A059] luxury-serif italic text-xl sm:text-2xl mb-4 tracking-wide">{agencyConfig.tagline}</p>
               <h1 className="luxury-serif text-6xl sm:text-8xl lg:text-9xl font-normal leading-[0.9] mb-8 tracking-tighter">
-                {trip.tripName.split(' - ')[1] || 'Himalayan Retreat'}
+                {(trip.tripName || '').split(' - ')[1] || trip.tripName || 'Himalayan Retreat'}
               </h1>
               
               <div className="flex flex-wrap items-center gap-x-12 gap-y-6 mt-12 pt-12 border-t border-[#FDFBF7]/20 uppercase tracking-[0.2em] text-[10px] sm:text-xs">
@@ -296,9 +315,9 @@ const ClientItinerary: React.FC = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
               {[
-                { label: 'Cinematic Route', value: trip.itinerary.map(d => d.location).filter((v, i, a) => a.indexOf(v) === i).join(' → ') },
+                { label: 'Cinematic Route', value: (trip.itinerary || []).map(d => d.location).filter((v, i, a) => v && a.indexOf(v) === i).join(' → ') },
                 { label: 'Exclusivity', value: trip.tripType },
-                { label: 'Accommodations', value: `${Array.from(new Set(trip.itinerary.map(d => d.hotelId).filter(Boolean))).length} Luxury Boutiques` },
+                { label: 'Accommodations', value: `${Array.from(new Set((trip.itinerary || []).map(d => d.hotelId).filter(Boolean))).length} Luxury Boutiques` },
                 { label: 'Transport', value: 'Private Dedicated Luxury Vehicle' },
                 { label: 'Total Investment', value: `₹${proposalPrice.toLocaleString()}` },
                 { label: 'Guests', value: `${trip.pax} Adults` },
@@ -343,7 +362,7 @@ const ClientItinerary: React.FC = () => {
              </div>
 
              <div className="relative space-y-12 pl-12 border-l border-[#C5A059]/30">
-               {trip.itinerary.map((day, idx) => (
+               {(trip.itinerary || []).map((day, idx) => (
                  <div key={day.id} className="relative group">
                     <div className="absolute -left-[54px] top-0 w-10 h-10 rounded-full bg-[#FDFBF7] border border-[#C5A059] flex items-center justify-center text-[10px] font-bold group-hover:bg-[#C5A059] group-hover:text-white transition-all shadow-sm">
                       {idx + 1}
@@ -353,7 +372,7 @@ const ClientItinerary: React.FC = () => {
                       <p className="text-[10px] uppercase font-bold tracking-widest text-[#C5A059] flex items-center gap-2">
                         <MapPin size={10} /> {day.location}
                         <span className="w-1 h-1 rounded-full bg-slate-300"/>
-                        {idx === trip.itinerary.length - 1 ? 'Departure' : 'Evening at Leisure'}
+                        {idx === (trip.itinerary?.length || 0) - 1 ? 'Departure' : 'Evening at Leisure'}
                       </p>
                     </div>
                  </div>
@@ -363,10 +382,12 @@ const ClientItinerary: React.FC = () => {
         </section>
 
         {/* 4. DAILY ITINERARY SECTION - Storytelling */}
-        {trip.itinerary.map((day, idx) => {
+        {(trip.itinerary || []).map((day, idx) => {
           const hotel = getDayHotel(day.hotelId);
-          // High-end sample image if not provided
-          const dayImage = "https://images.unsplash.com/photo-1595815771614-ade9d652a65d?auto=format&fit=crop&q=80&w=1200";
+          // Use user-uploaded images if available, else high-end sample
+          const dayImage = day.images && day.images.length > 0 
+            ? day.images[0] 
+            : "https://images.unsplash.com/photo-1595815771614-ade9d652a65d?auto=format&fit=crop&q=80&w=1200";
           
           return (
             <section key={day.id} className="w-full bg-[#FDFBF7] page-break">
@@ -415,59 +436,154 @@ const ClientItinerary: React.FC = () => {
           );
         })}
 
-        {/* 5. ACCOMMODATIONS SECTION */}
+        {/* 5. ACCOMMODATIONS COMPARISON SECTION */}
         <section className="w-full bg-[#F5F1E9] p-12 lg:p-20 page-break">
-          <div className="max-w-4xl mx-auto">
+          <div className="max-w-screen-xl mx-auto">
              <div className="mb-16">
                <span className="text-[10px] uppercase font-bold tracking-[0.4em] text-[#C5A059]">BEYOND STAYING</span>
-               <h3 className="luxury-serif text-4xl sm:text-5xl mt-4">Echoes of Comfort</h3>
+               <h3 className="luxury-serif text-4xl sm:text-5xl mt-4">Tiered Accommodations</h3>
+               <p className="text-[#0F1115]/50 text-xs mt-2 uppercase tracking-widest font-bold">Compare elite selections across our curated categories</p>
              </div>
 
-             <div className="space-y-12">
-               {Array.from(new Set(trip.itinerary.map(d => d.hotelId).filter(Boolean))).map((hId, idx) => {
-                 const hotel = getDayHotel(hId as string);
-                 if (!hotel) return null;
-                 const nights = trip.itinerary.filter(d => d.hotelId === hId).length;
-                 const hotelImage = "https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?auto=format&fit=crop&q=80&w=1200";
+             <div className="overflow-x-auto">
+               <table className="w-full border-collapse table-fixed">
+                 <thead>
+                   <tr>
+                     <th className="w-[18%] p-6 text-left text-[10px] uppercase tracking-[0.3em] font-black text-slate-400 bg-white/50 rounded-tl-3xl">Destination</th>
+                     <th className="w-[27.33%] p-6 text-left text-[10px] uppercase tracking-[0.3em] font-black text-slate-500 bg-slate-50">Elite Signature</th>
+                     <th className="w-[27.33%] p-6 text-left text-[10px] uppercase tracking-[0.3em] font-black text-blue-600 bg-blue-50/50">Elite Premier</th>
+                     <th className="w-[27.33%] p-6 text-left text-[10px] uppercase tracking-[0.3em] font-black text-amber-600 bg-amber-50/50 rounded-tr-3xl">Elite Prime</th>
+                   </tr>
+                 </thead>
+                 <tbody className="bg-white">
+                   {itineraryLocations.map((loc, idx) => {
+                      const hotelTiers = Array.isArray(trip.hotelTiers) ? trip.hotelTiers : Object.values(trip.hotelTiers || {});
+                      const tierSelection: any = hotelTiers.find((t: any) => t.location === loc);
+                      return (
+                        <tr key={loc} className="border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors">
+                          <td className="p-6 font-black uppercase tracking-widest text-xs text-slate-900 bg-slate-50/30">
+                            <div className="flex items-center gap-2">
+                              <MapPin size={12} className="text-[#C5A059]" />
+                              {loc}
+                            </div>
+                          </td>
+                          <td className="p-6 text-[10px] text-slate-500 font-medium whitespace-normal">
+                            <div className="flex flex-col gap-3">
+                              <div className="w-full aspect-[16/10] rounded-2xl overflow-hidden shrink-0 border border-slate-100 bg-slate-50 shadow-sm">
+                                <img 
+                                  src={getDayHotel(tierSelection?.signatureHotelId)?.gallery?.[0] || 'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&q=80&w=400'} 
+                                  className="w-full h-full object-cover transition-transform hover:scale-110 duration-700" 
+                                  alt="" 
+                                />
+                              </div>
+                              <span className="italic font-bold text-slate-900 leading-tight block truncate">{getDayHotel(tierSelection?.signatureHotelId)?.name || 'Standard Boutique'}</span>
+                            </div>
+                          </td>
+                          <td className="p-6 text-[10px] text-blue-900 font-bold whitespace-normal">
+                            <div className="flex flex-col gap-3">
+                              <div className="w-full aspect-[16/10] rounded-2xl overflow-hidden shrink-0 border border-blue-100 bg-blue-50 shadow-sm">
+                                <img 
+                                  src={getDayHotel(tierSelection?.eliteHotelId)?.gallery?.[0] || 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&q=80&w=400'} 
+                                  className="w-full h-full object-cover transition-transform hover:scale-110 duration-700" 
+                                  alt="" 
+                                />
+                              </div>
+                              <span className="text-blue-900 font-bold leading-tight block truncate">{getDayHotel(tierSelection?.eliteHotelId)?.name || 'Deluxe Curator'}</span>
+                            </div>
+                          </td>
+                          <td className="p-6 text-[10px] text-amber-900 font-black whitespace-normal">
+                            <div className="flex flex-col gap-3">
+                              <div className="w-full aspect-[16/10] rounded-2xl overflow-hidden shrink-0 border border-amber-100 bg-amber-50 shadow-sm">
+                                <img 
+                                  src={getDayHotel(tierSelection?.primeHotelId)?.gallery?.[0] || 'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?auto=format&fit=crop&q=80&w=400'} 
+                                  className="w-full h-full object-cover transition-transform hover:scale-110 duration-700" 
+                                  alt="" 
+                                />
+                              </div>
+                              <span className="text-amber-950 font-black leading-tight block truncate">{getDayHotel(tierSelection?.primeHotelId)?.name || 'Luxury Grande'}</span>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                   })}
+                 </tbody>
+               </table>
+             </div>
 
-                 return (
-                   <div key={idx} className="overflow-hidden ivory-card rounded-3xl flex flex-col md:flex-row group">
-                     <div className="md:w-1/3 h-64 md:h-auto overflow-hidden">
-                       <img src={hotelImage} className="w-full h-full object-cover group-hover:scale-110 transition-all duration-1000" alt={hotel.name} />
+             <div className="mt-20 grid grid-cols-1 md:grid-cols-3 gap-8">
+               {(() => {
+                 // Collect a few representative hotels across tiers for visual showcase
+                 const showcaseHotels: { id: string, tier: string, color: string }[] = [];
+                 
+                 itineraryLocations.slice(0, 2).forEach(loc => {
+                   const hotelTiers = Array.isArray(trip.hotelTiers) ? trip.hotelTiers : Object.values(trip.hotelTiers || {});
+                   const selection: any = hotelTiers.find((t: any) => t.location === loc);
+                   if (selection?.primeHotelId) showcaseHotels.push({ id: selection.primeHotelId, tier: 'Elite Prime', color: 'text-amber-600' });
+                   if (selection?.eliteHotelId) showcaseHotels.push({ id: selection.eliteHotelId, tier: 'Elite Premier', color: 'text-blue-600' });
+                   if (selection?.signatureHotelId) showcaseHotels.push({ id: selection.signatureHotelId, tier: 'Elite Signature', color: 'text-slate-500' });
+                 });
+
+                 return showcaseHotels.slice(0, 6).map((item, idx) => {
+                   const hotel = getDayHotel(item.id);
+                   if (!hotel) return null;
+                   const hotelImage = hotel.gallery?.[0] || "https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?auto=format&fit=crop&q=80&w=1200";
+
+                   return (
+                     <div key={idx} className="overflow-hidden ivory-card rounded-3xl flex flex-col group transition-all hover:shadow-xl hover:border-[#C5A059]/30">
+                       <div className="h-64 overflow-hidden relative">
+                         <img src={hotelImage} className="w-full h-full object-cover group-hover:scale-110 transition-all duration-1000" alt={hotel.name} />
+                         <div className="absolute top-4 right-4 px-3 py-1 bg-white/90 backdrop-blur-sm rounded-full shadow-sm">
+                           <p className={`text-[8px] font-black uppercase tracking-widest ${item.color}`}>{item.tier}</p>
+                         </div>
+                       </div>
+                       <div className="p-8 flex-1 flex flex-col justify-center">
+                          <div className="flex gap-1 mb-3">
+                             {[...Array(5)].map((_, i) => (
+                               <Star key={i} size={10} className="fill-[#C5A059] text-[#C5A059]" />
+                             ))}
+                          </div>
+                          <h4 className="luxury-serif text-2xl mb-3">{hotel.name}</h4>
+                          <div className="flex justify-between items-end">
+                            <p className="text-[10px] uppercase tracking-widest font-black text-[#C5A059] opacity-70">{hotel.location}</p>
+                            <span className="text-[8px] uppercase font-bold text-slate-400">Curated Choice</span>
+                          </div>
+                       </div>
                      </div>
-                     <div className="p-8 md:p-12 flex-1 flex flex-col justify-center">
-                        <div className="flex gap-1 mb-3">
-                           {[...Array(5)].map((_, i) => (
-                             <Star key={i} size={10} className="fill-[#C5A059] text-[#C5A059]" />
-                           ))}
-                        </div>
-                        <h4 className="luxury-serif text-3xl mb-4">{hotel.name}</h4>
-                        <div className="flex flex-wrap gap-x-6 gap-y-3 uppercase tracking-widest text-[10px] font-bold text-[#0F1115]/60">
-                          <span className="flex items-center gap-2"><MapPin size={12} className="text-[#C5A059]"/> {hotel.location}</span>
-                          <span className="flex items-center gap-2"><Clock size={12} className="text-[#C5A059]"/> {nights} Nights</span>
-                          <span className="flex items-center gap-2"><Check size={12} className="text-[#C5A059]"/> Pre-Qualified Exclusive</span>
-                        </div>
-                     </div>
-                   </div>
-                 );
-               })}
+                   );
+                 });
+               })()}
              </div>
           </div>
         </section>
 
         {/* 6. INVESTMENT SECTION */}
         <section className="w-full bg-[#0F1115] text-[#FDFBF7] p-12 lg:p-20 page-break">
-          <div className="max-w-4xl mx-auto text-center border border-[#C5A059]/30 rounded-[4rem] p-16 sm:p-24">
+          <div className="max-w-4xl mx-auto text-center">
              <span className="text-[10px] uppercase font-bold tracking-[0.6em] text-[#C5A059] mb-8 block">THE SOPHISTICATED CHOICE</span>
-             <h3 className="luxury-serif text-4xl sm:text-6xl mb-12">An Investment in Memories</h3>
+             <h3 className="luxury-serif text-4xl sm:text-6xl mb-12">Tiered Selections</h3>
              
-             <div className="text-6xl sm:text-8xl font-serif text-[#C5A059] mb-4 italic">₹{proposalPrice.toLocaleString()}</div>
-             <p className="text-sm uppercase tracking-widest font-bold opacity-60">Complete Curated Journey for {trip.pax} Guests</p>
+             {tiers.length > 0 ? (
+               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-16">
+                 {tiers.map((tier) => (
+                   <div key={tier.id} className={`p-8 rounded-[32px] border-2 ${tier.id === 'elite' ? 'border-[#C5A059] bg-[#C5A059]/5' : 'border-white/10 bg-white/5'} flex flex-col items-center gap-4 transition-all hover:scale-105`}>
+                      <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${tier.color}`}>{tier.name}</span>
+                      <div className="text-3xl font-serif text-[#FDFBF7]">₹{tier.price.toLocaleString()}</div>
+                      <div className="h-px w-8 bg-white/20" />
+                      <p className="text-[8px] uppercase tracking-widest opacity-50 font-bold">Inclusive Price</p>
+                   </div>
+                 ))}
+               </div>
+             ) : (
+               <div className="p-12 border border-[#C5A059]/30 rounded-[4rem] mb-12">
+                 <div className="text-6xl sm:text-8xl font-serif text-[#C5A059] mb-4 italic">₹{proposalPrice.toLocaleString()}</div>
+                 <p className="text-sm uppercase tracking-widest font-bold opacity-60">Complete Curated Journey for {trip.pax} Guests</p>
+               </div>
+             )}
              
              <div className="mt-16 pt-16 border-t border-[#FDFBF7]/10 grid grid-cols-2 sm:grid-cols-4 gap-8">
                 <div>
-                  <p className="text-[10px] opacity-40 mb-2 uppercase tracking-widest">Base Rate</p>
-                  <p className="font-serif italic text-lg">₹{regularPrice.toLocaleString()}</p>
+                  <p className="text-[10px] opacity-40 mb-2 uppercase tracking-widest">Pricing Model</p>
+                  <p className="font-serif italic text-lg">{tiers.length > 0 ? 'Tiered Options' : 'Fixed Quota'}</p>
                 </div>
                 <div>
                   <p className="text-[10px] opacity-40 mb-2 uppercase tracking-widest">Exclusive Concierge</p>

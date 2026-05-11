@@ -61,7 +61,7 @@ const ProfileSettings: React.FC = () => {
   const [isLoadingMembers, setIsLoadingMembers] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [formData, setFormData] = useState<Partial<TeamMember>>({
+  const [formData, setFormData] = useState<Partial<TeamMember>>(() => ({
     name: '',
     title: '',
     role: UserRole.SALES,
@@ -70,7 +70,7 @@ const ProfileSettings: React.FC = () => {
     phone: '',
     location: 'Srinagar Office',
     color: 'bg-emerald-600'
-  });
+  }));
 
   const fetchMembers = async () => {
     try {
@@ -90,7 +90,7 @@ const ProfileSettings: React.FC = () => {
 
   useEffect(() => {
     if (userProfile && userProfile.role === UserRole.ADMIN) {
-      fetchMembers();
+      Promise.resolve().then(() => fetchMembers());
     }
   }, [userProfile]);
 

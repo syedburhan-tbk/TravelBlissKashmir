@@ -5,30 +5,45 @@ import { ArrowLeft, User, Phone, Mail, Globe, MapPinned, Users, Wallet, Calendar
 import { Lead, LeadStage, LeadScore, TripType, TeamMember } from '../types';
 import { MOCK_LEADS, DEFAULT_PERSONAS } from '../constants';
 
+import { safeLocalStorage, STORAGE_KEYS } from '../utils/storage';
+
 const NewLead: React.FC = () => {
   const navigate = useNavigate();
-  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
-  const [formData, setFormData] = useState({
-    name: '',
-    phone: '',
-    email: '',
-    source: 'Instagram',
-    interest: TripType.FAMILY,
-    budgetRange: '1L - 2L',
-    travelMonth: 'May',
-    pax: 2,
-    score: LeadScore.WARM,
-    notes: '',
-    assignedTo: ''
+  const [teamMembers] = useState<TeamMember[]>(() => {
+    try {
+      const savedMembers = safeLocalStorage.getItem(STORAGE_KEYS.TEAM_MEMBERS);
+      return savedMembers ? JSON.parse(savedMembers) : DEFAULT_PERSONAS;
+    } catch (e) {
+      console.error('Failed to parse team members in NewLead initial state:', e);
+      return DEFAULT_PERSONAS;
+    }
+  });
+  const [formData, setFormData] = useState(() => {
+    let members = DEFAULT_PERSONAS;
+    try {
+      const savedMembers = safeLocalStorage.getItem(STORAGE_KEYS.TEAM_MEMBERS);
+      if (savedMembers) members = JSON.parse(savedMembers);
+    } catch (e) {
+      console.warn('NewLead formData initializer: Failed to parse members:', e);
+    }
+
+    return {
+      name: '',
+      phone: '',
+      email: '',
+      source: 'Instagram',
+      interest: TripType.FAMILY,
+      budgetRange: '1L - 2L',
+      travelMonth: 'May',
+      pax: 2,
+      score: LeadScore.WARM,
+      notes: '',
+      assignedTo: members.length > 0 ? members[0].name : ''
+    };
   });
 
   useEffect(() => {
-    const savedMembers = localStorage.getItem('et_team_members');
-    const members: TeamMember[] = savedMembers ? JSON.parse(savedMembers) : DEFAULT_PERSONAS;
-    setTeamMembers(members);
-    if (members.length > 0) {
-      setFormData(prev => ({ ...prev, assignedTo: members[0].name }));
-    }
+    // Initialized via useState initializers
   }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -45,10 +60,14 @@ const NewLead: React.FC = () => {
       whatsappOptIn: true
     };
 
-    const saved = localStorage.getItem('et_leads');
-    const allLeads = saved ? JSON.parse(saved) : [...MOCK_LEADS];
-    allLeads.push(newLead);
-    localStorage.setItem('et_leads', JSON.stringify(allLeads));
+    try {
+      const saved = safeLocalStorage.getItem(STORAGE_KEYS.LEADS);
+      const allLeads = saved ? JSON.parse(saved) : [...MOCK_LEADS];
+      allLeads.push(newLead);
+      safeLocalStorage.setItem(STORAGE_KEYS.LEADS, JSON.stringify(allLeads));
+    } catch (e) {
+      console.error('Failed to save lead:', e);
+    }
     
     navigate(`/leads/${newLead.id}`);
   };

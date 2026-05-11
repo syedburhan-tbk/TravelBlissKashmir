@@ -23,6 +23,8 @@ import {
 import { ACTIVITIES } from '../constants';
 import { Activity } from '../types';
 
+import { safeLocalStorage, STORAGE_KEYS } from '../utils/storage';
+
 const ACTIVITY_CATEGORIES = ['Sightseeing', 'Adventure', 'Cultural', 'Nature', 'Leisure'];
 
 const Activities: React.FC = () => {
@@ -32,7 +34,15 @@ const Activities: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingActivityId, setEditingActivityId] = useState<string | null>(null);
   const [viewingActivity, setViewingActivity] = useState<Activity | null>(null);
-  const [customActivities, setCustomActivities] = useState<Activity[]>([]);
+  const [customActivities, setCustomActivities] = useState<Activity[]>(() => {
+    try {
+      const saved = safeLocalStorage.getItem(STORAGE_KEYS.ACTIVITIES);
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      console.error('Failed to parse custom activities:', e);
+      return [];
+    }
+  });
   const imageInputRef = useRef<HTMLInputElement>(null);
 
   const initialFormState: Partial<Activity> = {
@@ -48,11 +58,6 @@ const Activities: React.FC = () => {
 
   const [formData, setFormData] = useState<Partial<Activity>>(initialFormState);
 
-  // Persistence
-  useEffect(() => {
-    const saved = localStorage.getItem('et_activities');
-    if (saved) setCustomActivities(JSON.parse(saved));
-  }, []);
 
   const allActivities = useMemo(() => {
     const customIds = new Set(customActivities.map(a => a.id));
@@ -114,7 +119,7 @@ const Activities: React.FC = () => {
     } else updated = [...customActivities, activityData];
 
     setCustomActivities(updated);
-    localStorage.setItem('et_activities', JSON.stringify(updated));
+    safeLocalStorage.setItem(STORAGE_KEYS.ACTIVITIES, JSON.stringify(updated));
     setIsModalOpen(false);
   };
 
@@ -123,7 +128,7 @@ const Activities: React.FC = () => {
     if (window.confirm("Permanently remove this activity from inventory?")) {
       const updated = customActivities.filter(a => a.id !== id);
       setCustomActivities(updated);
-      localStorage.setItem('et_activities', JSON.stringify(updated));
+      safeLocalStorage.setItem(STORAGE_KEYS.ACTIVITIES, JSON.stringify(updated));
       setViewingActivity(null);
     }
   };
@@ -417,11 +422,11 @@ const Activities: React.FC = () => {
                   <div className="grid grid-cols-2 gap-8">
                      <div className="col-span-2 space-y-2">
                         <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Activity Name</label>
-                        <input required type="text" className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-base font-black text-slate-900 outline-none focus:ring-4 focus:ring-blue-50/50 transition-all shadow-inner" placeholder="e.g. Shikara Ride on Dal Lake" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                        <input required type="text" className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-base font-black text-slate-900 outline-none focus:ring-4 focus:ring-blue-50/50 transition-all shadow-inner" placeholder="e.g. Shikara Ride on Dal Lake" value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} />
                      </div>
                      <div className="space-y-2">
                         <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Primary Hub (Location)</label>
-                        <input required type="text" className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-900 outline-none" placeholder="e.g. Srinagar" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} />
+                        <input required type="text" className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-900 outline-none" placeholder="e.g. Srinagar" value={formData.location || ''} onChange={e => setFormData({...formData, location: e.target.value})} />
                      </div>
                      <div className="space-y-2">
                         <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Category</label>
@@ -437,7 +442,7 @@ const Activities: React.FC = () => {
                   <div className="grid grid-cols-2 gap-8">
                      <div className="space-y-2">
                         <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Standard Duration</label>
-                        <input type="text" className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-900 outline-none" placeholder="e.g. 1.5 Hours" value={formData.duration} onChange={e => setFormData({...formData, duration: e.target.value})} />
+                        <input type="text" className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-900 outline-none" placeholder="e.g. 1.5 Hours" value={formData.duration || ''} onChange={e => setFormData({...formData, duration: e.target.value})} />
                      </div>
                      <div className="space-y-2">
                         <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Net Cost / PAX</label>
@@ -454,11 +459,11 @@ const Activities: React.FC = () => {
                   <div className="space-y-6">
                      <div className="space-y-2">
                         <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Client Narrative (Public)</label>
-                        <textarea rows={4} className="w-full p-6 bg-slate-50 border border-slate-200 rounded-[32px] text-sm font-medium leading-relaxed text-slate-700 outline-none shadow-inner" placeholder="Briefly describe the guest experience..." value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
+                        <textarea rows={4} className="w-full p-6 bg-slate-50 border border-slate-200 rounded-[32px] text-sm font-medium leading-relaxed text-slate-700 outline-none shadow-inner" placeholder="Briefly describe the guest experience..." value={formData.description || ''} onChange={e => setFormData({...formData, description: e.target.value})} />
                      </div>
                      <div className="space-y-2">
                         <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Internal Logistical Notes (Hidden)</label>
-                        <textarea rows={3} className="w-full p-6 bg-slate-50 border border-slate-200 rounded-[32px] text-sm font-bold leading-relaxed text-slate-600 outline-none shadow-inner italic" placeholder="Add provider details, seasonal restrictions, or booking tips..." value={formData.internalNotes} onChange={e => setFormData({...formData, internalNotes: e.target.value})} />
+                        <textarea rows={3} className="w-full p-6 bg-slate-50 border border-slate-200 rounded-[32px] text-sm font-bold leading-relaxed text-slate-600 outline-none shadow-inner italic" placeholder="Add provider details, seasonal restrictions, or booking tips..." value={formData.internalNotes || ''} onChange={e => setFormData({...formData, internalNotes: e.target.value})} />
                      </div>
                   </div>
                </div>

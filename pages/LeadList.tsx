@@ -37,10 +37,34 @@ import { MOCK_LEADS, DEFAULT_PERSONAS } from '../constants';
 import { suggestFollowUp } from '../services/geminiService';
 import { DEFAULT_TEMPLATES, sendSimulatedMessage, saveMessageLog } from '../services/messagingService';
 
+import { safeLocalStorage, STORAGE_KEYS } from '../utils/storage';
+
 const LeadList: React.FC = () => {
   const navigate = useNavigate();
-  const [leads, setLeads] = useState<Lead[]>([]);
-  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [leads, setLeads] = useState<Lead[]>(() => {
+    try {
+      const savedLeads = safeLocalStorage.getItem(STORAGE_KEYS.LEADS);
+      if (savedLeads) {
+        const parsed = JSON.parse(savedLeads);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {
+      console.error('Failed to parse leads in LeadList:', e);
+    }
+    return MOCK_LEADS;
+  });
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>(() => {
+    try {
+      const savedMembers = safeLocalStorage.getItem(STORAGE_KEYS.TEAM_MEMBERS);
+      if (savedMembers) {
+        const parsed = JSON.parse(savedMembers);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {
+      console.error('Failed to parse team members in LeadList:', e);
+    }
+    return DEFAULT_PERSONAS;
+  });
   const [searchTerm, setSearchTerm] = useState('');
   const [stageFilter, setStageFilter] = useState('All');
   const [scoreFilter, setScoreFilter] = useState('All');
@@ -61,16 +85,12 @@ const LeadList: React.FC = () => {
   const [isBulkSending, setIsBulkSending] = useState(false);
 
   useEffect(() => {
-    const savedLeads = localStorage.getItem('et_leads');
-    setLeads(savedLeads ? JSON.parse(savedLeads) : MOCK_LEADS);
-
-    const savedMembers = localStorage.getItem('et_team_members');
-    setTeamMembers(savedMembers ? JSON.parse(savedMembers) : DEFAULT_PERSONAS);
+    // Already initialized via useState initializer
   }, []);
 
   const saveLeads = (updatedLeads: Lead[]) => {
     setLeads(updatedLeads);
-    localStorage.setItem('et_leads', JSON.stringify(updatedLeads));
+    safeLocalStorage.setItem(STORAGE_KEYS.LEADS, JSON.stringify(updatedLeads));
   };
 
   const filteredLeads = useMemo(() => {
@@ -519,18 +539,18 @@ const LeadList: React.FC = () => {
                 <div className="grid grid-cols-2 gap-6">
                    <div className="space-y-1">
                       <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Full Name</label>
-                      <input required type="text" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none text-slate-900" value={editingLead.name} onChange={e => setEditingLead({...editingLead, name: e.target.value})} />
+                      <input required type="text" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none text-slate-900" value={editingLead.name || ''} onChange={e => setEditingLead({...editingLead, name: e.target.value})} />
                    </div>
                    <div className="space-y-1">
                       <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Phone</label>
-                      <input required type="text" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none text-slate-900" value={editingLead.phone} onChange={e => setEditingLead({...editingLead, phone: e.target.value})} />
+                      <input required type="text" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none text-slate-900" value={editingLead.phone || ''} onChange={e => setEditingLead({...editingLead, phone: e.target.value})} />
                    </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-6">
                    <div className="space-y-1">
                       <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Email</label>
-                      <input type="email" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none text-slate-900" value={editingLead.email} onChange={e => setEditingLead({...editingLead, email: e.target.value})} />
+                      <input type="email" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none text-slate-900" value={editingLead.email || ''} onChange={e => setEditingLead({...editingLead, email: e.target.value})} />
                    </div>
                    <div className="space-y-1">
                       <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Priority Score</label>
@@ -543,21 +563,21 @@ const LeadList: React.FC = () => {
                 <div className="grid grid-cols-3 gap-4">
                    <div className="space-y-1">
                       <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Travel Month</label>
-                      <input type="text" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none text-slate-900" value={editingLead.travelMonth} onChange={e => setEditingLead({...editingLead, travelMonth: e.target.value})} />
+                      <input type="text" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none text-slate-900" value={editingLead.travelMonth || ''} onChange={e => setEditingLead({...editingLead, travelMonth: e.target.value})} />
                    </div>
                    <div className="space-y-1">
                       <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Budget</label>
-                      <input type="text" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none text-slate-900" value={editingLead.budgetRange} onChange={e => setEditingLead({...editingLead, budgetRange: e.target.value})} />
+                      <input type="text" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none text-slate-900" value={editingLead.budgetRange || ''} onChange={e => setEditingLead({...editingLead, budgetRange: e.target.value})} />
                    </div>
                    <div className="space-y-1">
                       <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Pax</label>
-                      <input type="number" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none text-slate-900" value={editingLead.pax} onChange={e => setEditingLead({...editingLead, pax: parseInt(e.target.value)})} />
+                      <input type="number" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none text-slate-900" value={editingLead.pax || 0} onChange={e => setEditingLead({...editingLead, pax: parseInt(e.target.value)})} />
                    </div>
                 </div>
 
                 <div className="space-y-1">
                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Sales Notes</label>
-                   <textarea rows={4} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-medium outline-none text-slate-900" value={editingLead.notes} onChange={e => setEditingLead({...editingLead, notes: e.target.value})} />
+                   <textarea rows={4} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-medium outline-none text-slate-900" value={editingLead.notes || ''} onChange={e => setEditingLead({...editingLead, notes: e.target.value})} />
                 </div>
 
                 <div className="pt-4 flex gap-4">

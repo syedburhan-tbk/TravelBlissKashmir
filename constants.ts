@@ -209,82 +209,149 @@ export const DEFAULT_EXCLUSIONS = [
 // Added MOCK_TEMPLATES to fix missing exported member errors
 export const MOCK_TEMPLATES: TripTemplate[] = [
   {
-    id: 'mt-1',
-    name: 'Paradise Kashmir - 6D/5N',
+    id: 'mt-sri-sri-6',
+    name: 'Srinagar Round Trip - 6D/5N',
     duration: '6 Days, 5 Nights',
     tripType: TripType.FAMILY,
     baseMargin: 15,
     inclusions: [...DEFAULT_INCLUSIONS],
     exclusions: [...DEFAULT_EXCLUSIONS],
+    startLocation: 'Srinagar',
+    dropLocation: 'Srinagar',
     itinerary: [
-      { id: 'mtd1', dayNumber: 1, title: 'Arrival in Srinagar', location: 'Srinagar', hotelId: '', vehicleId: '', activityIds: [], clientNotes: 'Welcome to the summer capital of J&K.', internalNotes: 'Pickup from Airport.' },
-      { id: 'mtd2', dayNumber: 2, title: 'Srinagar to Gulmarg', location: 'Gulmarg', hotelId: '', vehicleId: '', activityIds: [], clientNotes: 'Enjoy the meadows of flowers.', internalNotes: 'Gondola tickets to be booked in advance.' },
-      { id: 'mtd3', dayNumber: 3, title: 'Gulmarg to Pahalgam', location: 'Pahalgam', hotelId: '', vehicleId: '', activityIds: [], clientNotes: 'Drive to the valley of shepherds.', internalNotes: '' },
-      { id: 'mtd4', dayNumber: 4, title: 'Pahalgam Sightseeing', location: 'Pahalgam', hotelId: '', vehicleId: '', activityIds: [], clientNotes: 'Visit local spots.', internalNotes: '' },
-      { id: 'mtd5', dayNumber: 5, title: 'Pahalgam to Srinagar', location: 'Srinagar', hotelId: '', vehicleId: '', activityIds: [], clientNotes: 'Overnight in Houseboat.', internalNotes: '' },
-      { id: 'mtd6', dayNumber: 6, title: 'Departure', location: 'Srinagar', hotelId: '', vehicleId: '', activityIds: [], clientNotes: 'Transfer to Srinagar Airport.', internalNotes: '' }
+      { id: 'ss6-1', dayNumber: 1, title: 'Arrival in Srinagar', location: 'Srinagar', hotelId: '', vehicleId: '', activityIds: ['a1'], clientNotes: 'Welcome to Srinagar.', internalNotes: 'Airport pickup.' },
+      { id: 'ss6-2', dayNumber: 2, title: 'Srinagar to Gulmarg', location: 'Gulmarg', hotelId: '', vehicleId: '', activityIds: ['a2'], clientNotes: 'Day trip or stay in Gulmarg.', internalNotes: '' },
+      { id: 'ss6-3', dayNumber: 3, title: 'Gulmarg to Pahalgam', location: 'Pahalgam', hotelId: '', vehicleId: '', activityIds: [], clientNotes: 'Scenic drive to Pahalgam.', internalNotes: '' },
+      { id: 'ss6-4', dayNumber: 4, title: 'Pahalgam Local Sightseeing', location: 'Pahalgam', hotelId: '', vehicleId: '', activityIds: ['a3'], clientNotes: 'Visit Aru/Betaab Valley.', internalNotes: '' },
+      { id: 'ss6-5', dayNumber: 5, title: 'Pahalgam to Srinagar', location: 'Srinagar', hotelId: '', vehicleId: '', activityIds: [], clientNotes: 'Stay in a Houseboat.', internalNotes: '' },
+      { id: 'ss6-6', dayNumber: 6, title: 'Departure from Srinagar', location: 'Srinagar', hotelId: '', vehicleId: '', activityIds: [], clientNotes: 'Transfer to airport.', internalNotes: 'Airport drop.' }
     ]
   },
   {
-    id: 'mt-sri-5',
-    name: 'Srinagar Pick & Drop - 5D/4N',
+    id: 'mt-sri-sri-5',
+    name: 'Srinagar Round Trip - 5D/4N',
     duration: '5 Days, 4 Nights',
     tripType: TripType.COUPLE,
     baseMargin: 15,
     inclusions: [...DEFAULT_INCLUSIONS],
     exclusions: [...DEFAULT_EXCLUSIONS],
+    startLocation: 'Srinagar',
+    dropLocation: 'Srinagar',
     itinerary: [
-      { id: 'ms5-1', dayNumber: 1, title: 'Arrival & Srinagar Sightseeing', location: 'Srinagar', hotelId: '', vehicleId: '', activityIds: [], clientNotes: 'Arrive at Srinagar airport. Local sightseeing including Mughal Gardens.', internalNotes: 'Airport pickup and check-in.' },
-      { id: 'ms5-2', dayNumber: 2, title: 'Day Trip to Gulmarg', location: 'Srinagar', hotelId: '', vehicleId: '', activityIds: [], clientNotes: 'Full day excursion to Gulmarg. Enjoy Gondola ride.', internalNotes: 'Suggest pre-booking Gondola.' },
-      { id: 'ms5-3', dayNumber: 3, title: 'Srinagar to Pahalgam', location: 'Pahalgam', hotelId: '', vehicleId: '', activityIds: [], clientNotes: 'Drive to Pahalgam. Enroute visit Saffron fields.', internalNotes: 'Drive takes ~2.5 hrs.' },
-      { id: 'ms5-4', dayNumber: 4, title: 'Pahalgam to Srinagar Houseboat', location: 'Srinagar', hotelId: '', vehicleId: '', activityIds: [], clientNotes: 'Morning in Pahalgam, afternoon drive to Srinagar. Check in to Houseboat.', internalNotes: 'Houseboat check-in.' },
-      { id: 'ms5-5', dayNumber: 5, title: 'Departure from Srinagar', location: 'Srinagar', hotelId: '', vehicleId: '', activityIds: [], clientNotes: 'Transfer to Srinagar airport for onward journey.', internalNotes: 'Airport drop.' }
+      { id: 'ss5-1', dayNumber: 1, title: 'Arrival & Srinagar Sightseeing', location: 'Srinagar', hotelId: '', vehicleId: '', activityIds: ['a1'], clientNotes: 'Welcome to Srinagar.', internalNotes: 'Airport pickup.' },
+      { id: 'ss5-2', dayNumber: 2, title: 'Srinagar to Pahalgam', location: 'Pahalgam', hotelId: '', vehicleId: '', activityIds: [], clientNotes: 'Drive to the saffron fields.', internalNotes: '' },
+      { id: 'ss5-3', dayNumber: 3, title: 'Pahalgam to Gulmarg', location: 'Gulmarg', hotelId: '', vehicleId: '', activityIds: ['a2'], clientNotes: 'Full day excursion to Gulmarg.', internalNotes: '' },
+      { id: 'ss5-4', dayNumber: 4, title: 'Gulmarg to Srinagar', location: 'Srinagar', hotelId: '', vehicleId: '', activityIds: [], clientNotes: 'Stay in a Houseboat.', internalNotes: '' },
+      { id: 'ss5-5', dayNumber: 5, title: 'Departure from Srinagar', location: 'Srinagar', hotelId: '', vehicleId: '', activityIds: [], clientNotes: 'Transfer to airport.', internalNotes: 'Airport drop.' }
     ]
   },
   {
-    id: 'mt-sri-4',
-    name: 'Srinagar Pick & Drop - 4D/3N',
+    id: 'mt-sri-sri-4',
+    name: 'Srinagar Round Trip - 4D/3N',
     duration: '4 Days, 3 Nights',
     tripType: TripType.FAMILY,
     baseMargin: 15,
     inclusions: [...DEFAULT_INCLUSIONS],
     exclusions: [...DEFAULT_EXCLUSIONS],
+    startLocation: 'Srinagar',
+    dropLocation: 'Srinagar',
     itinerary: [
-      { id: 'ms4-1', dayNumber: 1, title: 'Arrival & Srinagar Sightseeing', location: 'Srinagar', hotelId: '', vehicleId: '', activityIds: [], clientNotes: 'Arrive in Srinagar. Visit local Mughal Gardens & Shikara Ride.', internalNotes: 'Airport pickup.' },
-      { id: 'ms4-2', dayNumber: 2, title: 'Day Trip to Gulmarg', location: 'Srinagar', hotelId: '', vehicleId: '', activityIds: [], clientNotes: 'Day trip to Gulmarg. Return to Srinagar by evening.', internalNotes: '' },
-      { id: 'ms4-3', dayNumber: 3, title: 'Day Trip to Pahalgam', location: 'Srinagar', hotelId: '', vehicleId: '', activityIds: [], clientNotes: 'Day excursion to Pahalgam. Evening stay in a Houseboat.', internalNotes: 'Long day out.' },
-      { id: 'ms4-4', dayNumber: 4, title: 'Departure', location: 'Srinagar', hotelId: '', vehicleId: '', activityIds: [], clientNotes: 'Transfer to Srinagar airport.', internalNotes: 'Airport drop.' }
+      { id: 'ss4-1', dayNumber: 1, title: 'Arrival & Srinagar Sightseeing', location: 'Srinagar', hotelId: '', vehicleId: '', activityIds: ['a1'], clientNotes: 'Welcome to Srinagar.', internalNotes: 'Airport pickup.' },
+      { id: 'ss4-2', dayNumber: 2, title: 'Day Trip to Gulmarg', location: 'Srinagar', hotelId: '', vehicleId: '', activityIds: ['a2'], clientNotes: 'Explore the meadows.', internalNotes: '' },
+      { id: 'ss4-3', dayNumber: 3, title: 'Day Trip to Pahalgam', location: 'Srinagar', hotelId: '', vehicleId: '', activityIds: ['a3'], clientNotes: 'Visit Pahalgam.', internalNotes: '' },
+      { id: 'ss4-4', dayNumber: 4, title: 'Departure from Srinagar', location: 'Srinagar', hotelId: '', vehicleId: '', activityIds: [], clientNotes: 'Transfer to airport.', internalNotes: 'Airport drop.' }
     ]
   },
   {
-    id: 'mt-jam-5',
-    name: 'Jammu Pick & Drop - 5D/4N',
+    id: 'mt-jam-jam-6',
+    name: 'Jammu Round Trip - 6D/5N',
+    duration: '6 Days, 5 Nights',
+    tripType: TripType.FAMILY,
+    baseMargin: 15,
+    inclusions: [...DEFAULT_INCLUSIONS],
+    exclusions: [...DEFAULT_EXCLUSIONS],
+    startLocation: 'Jammu',
+    dropLocation: 'Jammu',
+    itinerary: [
+      { id: 'jj6-1', dayNumber: 1, title: 'Jammu Arrival & Drive to Pahalgam', location: 'Pahalgam', hotelId: '', vehicleId: '', activityIds: [], clientNotes: 'Long drive from Jammu to Pahalgam.', internalNotes: '7-8 hours drive.' },
+      { id: 'jj6-2', dayNumber: 2, title: 'Pahalgam to Srinagar', location: 'Srinagar', hotelId: '', vehicleId: '', activityIds: ['a3'], clientNotes: 'Drive to Srinagar.', internalNotes: '' },
+      { id: 'jj6-3', dayNumber: 3, title: 'Gulmarg Day Excursion', location: 'Srinagar', hotelId: '', vehicleId: '', activityIds: ['a2'], clientNotes: 'Day trip to Gulmarg.', internalNotes: '' },
+      { id: 'jj6-4', dayNumber: 4, title: 'Srinagar Sightseeing', location: 'Srinagar', hotelId: '', vehicleId: '', activityIds: ['a1'], clientNotes: 'Visit Mughal Gardens.', internalNotes: '' },
+      { id: 'jj6-5', dayNumber: 5, title: 'Srinagar to Patnitop', location: 'Patnitop', hotelId: '', vehicleId: '', activityIds: [], clientNotes: 'Break the journey at Patnitop.', internalNotes: '' },
+      { id: 'jj6-6', dayNumber: 6, title: 'Patnitop to Jammu Departure', location: 'Jammu', hotelId: '', vehicleId: '', activityIds: [], clientNotes: 'Transfer to Jammu Airport/Railway Station.', internalNotes: '' }
+    ]
+  },
+  {
+    id: 'mt-jam-jam-5',
+    name: 'Jammu Round Trip - 5D/4N',
     duration: '5 Days, 4 Nights',
     tripType: TripType.GROUP,
     baseMargin: 15,
     inclusions: [...DEFAULT_INCLUSIONS],
     exclusions: [...DEFAULT_EXCLUSIONS],
+    startLocation: 'Jammu',
+    dropLocation: 'Jammu',
     itinerary: [
-      { id: 'mj5-1', dayNumber: 1, title: 'Arrival at Jammu & Drive to Pahalgam', location: 'Pahalgam', hotelId: '', vehicleId: '', activityIds: [], clientNotes: 'Pickup from Jammu Airport/Railway Station. Drive directly to Pahalgam.', internalNotes: 'Long drive ~7-8 hours. Start early.' },
-      { id: 'mj5-2', dayNumber: 2, title: 'Pahalgam Sightseeing & Drive to Srinagar', location: 'Srinagar', hotelId: '', vehicleId: '', activityIds: [], clientNotes: 'Visit Aru/Betaab Valley in morning. Afternoon drive to Srinagar.', internalNotes: 'Arrange local union cab for Betaab Valley.' },
-      { id: 'mj5-3', dayNumber: 3, title: 'Day Trip to Gulmarg', location: 'Srinagar', hotelId: '', vehicleId: '', activityIds: [], clientNotes: 'Full day excursion to Gulmarg. Evening return to Srinagar.', internalNotes: '' },
-      { id: 'mj5-4', dayNumber: 4, title: 'Srinagar Sightseeing & Houseboat', location: 'Srinagar', hotelId: '', vehicleId: '', activityIds: [], clientNotes: 'Visit Mughal Gardens. Evening stay in a beautiful Dal Lake Houseboat.', internalNotes: 'Houseboat check-in.' },
-      { id: 'mj5-5', dayNumber: 5, title: 'Drive from Srinagar to Jammu', location: 'Srinagar', hotelId: '', vehicleId: '', activityIds: [], clientNotes: 'Early morning drive back to Jammu for drop off.', internalNotes: 'Another 7-8 hours drive. Need early departure.' }
+      { id: 'jj5-1', dayNumber: 1, title: 'Arrival at Jammu & Drive to Pahalgam', location: 'Pahalgam', hotelId: '', vehicleId: '', activityIds: [], clientNotes: 'Pickup from Jammu Airport/Railway Station.', internalNotes: '' },
+      { id: 'jj5-2', dayNumber: 2, title: 'Pahalgam to Srinagar', location: 'Srinagar', hotelId: '', vehicleId: '', activityIds: ['a3'], clientNotes: 'Visit Betaab/Aru Valley.', internalNotes: '' },
+      { id: 'jj5-3', dayNumber: 3, title: 'Gulmarg Day Trip', location: 'Srinagar', hotelId: '', vehicleId: '', activityIds: ['a2'], clientNotes: 'Full day in Gulmarg.', internalNotes: '' },
+      { id: 'jj5-4', dayNumber: 4, title: 'Srinagar Sightseeing & Houseboat', location: 'Srinagar', hotelId: '', vehicleId: '', activityIds: ['a1'], clientNotes: 'Stay in Houseboat.', internalNotes: '' },
+      { id: 'jj5-5', dayNumber: 5, title: 'Srinagar to Jammu Departure', location: 'Jammu', hotelId: '', vehicleId: '', activityIds: [], clientNotes: 'Drive back to Jammu.', internalNotes: '' }
     ]
   },
   {
-    id: 'mt-jam-4',
-    name: 'Jammu Pick & Drop - 4D/3N',
+    id: 'mt-jam-jam-4',
+    name: 'Jammu Round Trip - 4D/3N',
     duration: '4 Days, 3 Nights',
     tripType: TripType.COUPLE,
     baseMargin: 15,
     inclusions: [...DEFAULT_INCLUSIONS],
     exclusions: [...DEFAULT_EXCLUSIONS],
+    startLocation: 'Jammu',
+    dropLocation: 'Jammu',
     itinerary: [
-      { id: 'mj4-1', dayNumber: 1, title: 'Jammu Arrival & Drive to Srinagar', location: 'Srinagar', hotelId: '', vehicleId: '', activityIds: [], clientNotes: 'Pickup from Jammu and scenic drive to Srinagar.', internalNotes: 'Day long drive.' },
-      { id: 'mj4-2', dayNumber: 2, title: 'Day Trip to Gulmarg', location: 'Srinagar', hotelId: '', vehicleId: '', activityIds: [], clientNotes: 'Excursion to Gulmarg. Return to Srinagar by evening.', internalNotes: '' },
-      { id: 'mj4-3', dayNumber: 3, title: 'Srinagar Sightseeing & Houseboat', location: 'Srinagar', hotelId: '', vehicleId: '', activityIds: [], clientNotes: 'Local sightseeing and stay in Houseboat.', internalNotes: '' },
-      { id: 'mj4-4', dayNumber: 4, title: 'Drive to Jammu for Drop', location: 'Srinagar', hotelId: '', vehicleId: '', activityIds: [], clientNotes: 'Drive back to Jammu Airport/Railway Station.', internalNotes: 'Start early morning.' }
+      { id: 'jj4-1', dayNumber: 1, title: 'Jammu Arrival & Drive to Srinagar', location: 'Srinagar', hotelId: '', vehicleId: '', activityIds: [], clientNotes: 'Drive to Srinagar.', internalNotes: '' },
+      { id: 'jj4-2', dayNumber: 2, title: 'Day Trip to Gulmarg', location: 'Srinagar', hotelId: '', vehicleId: '', activityIds: ['a2'], clientNotes: 'Gondola ride.', internalNotes: '' },
+      { id: 'jj4-3', dayNumber: 3, title: 'Srinagar Sightseeing & Houseboat', location: 'Srinagar', hotelId: '', vehicleId: '', activityIds: ['a1'], clientNotes: 'Stay in Dal Lake.', internalNotes: '' },
+      { id: 'jj4-4', dayNumber: 4, title: 'Srinagar to Jammu Drop', location: 'Jammu', hotelId: '', vehicleId: '', activityIds: [], clientNotes: 'Drive to Jammu for drop.', internalNotes: '' }
+    ]
+  },
+  {
+    id: 'mt-sri-jam-6',
+    name: 'Srinagar to Jammu - 6D/5N',
+    duration: '6 Days, 5 Nights',
+    tripType: TripType.COUPLE,
+    baseMargin: 15,
+    inclusions: [...DEFAULT_INCLUSIONS],
+    exclusions: [...DEFAULT_EXCLUSIONS],
+    startLocation: 'Srinagar',
+    dropLocation: 'Jammu',
+    itinerary: [
+      { id: 'sj6-1', dayNumber: 1, title: 'Srinagar Arrival', location: 'Srinagar', hotelId: '', vehicleId: '', activityIds: ['a1'], clientNotes: 'Welcome to Kashmir.', internalNotes: '' },
+      { id: 'sj6-2', dayNumber: 2, title: 'Srinagar to Gulmarg', location: 'Gulmarg', hotelId: '', vehicleId: '', activityIds: ['a2'], clientNotes: 'Explore Gulmarg.', internalNotes: '' },
+      { id: 'sj6-3', dayNumber: 3, title: 'Gulmarg to Pahalgam', location: 'Pahalgam', hotelId: '', vehicleId: '', activityIds: [], clientNotes: 'Drive to Pahalgam.', internalNotes: '' },
+      { id: 'sj6-4', dayNumber: 4, title: 'Pahalgam Sightseeing', location: 'Pahalgam', hotelId: '', vehicleId: '', activityIds: ['a3'], clientNotes: 'Valley sightseeing.', internalNotes: '' },
+      { id: 'sj6-5', dayNumber: 5, title: 'Pahalgam to Jammu (Via Patnitop)', location: 'Jammu', hotelId: '', vehicleId: '', activityIds: [], clientNotes: 'Drive to Jammu for orientation.', internalNotes: 'Long mountain drive.' },
+      { id: 'sj6-6', dayNumber: 6, title: 'Jammu Departure', location: 'Jammu', hotelId: '', vehicleId: '', activityIds: [], clientNotes: 'Drop at Jammu station/airport.', internalNotes: '' }
+    ]
+  },
+  {
+    id: 'mt-jam-sri-6',
+    name: 'Jammu to Srinagar - 6D/5N',
+    duration: '6 Days, 5 Nights',
+    tripType: TripType.GROUP,
+    baseMargin: 15,
+    inclusions: [...DEFAULT_INCLUSIONS],
+    exclusions: [...DEFAULT_EXCLUSIONS],
+    startLocation: 'Jammu',
+    dropLocation: 'Srinagar',
+    itinerary: [
+      { id: 'js6-1', dayNumber: 1, title: 'Jammu Arrival & Drive to Pahalgam', location: 'Pahalgam', hotelId: '', vehicleId: '', activityIds: [], clientNotes: 'Pickup from Jammu.', internalNotes: '' },
+      { id: 'js6-2', dayNumber: 2, title: 'Pahalgam Exploration', location: 'Pahalgam', hotelId: '', vehicleId: '', activityIds: ['a3'], clientNotes: 'Full day in Pahalgam.', internalNotes: '' },
+      { id: 'js6-3', dayNumber: 3, title: 'Pahalgam to Gulmarg', location: 'Gulmarg', hotelId: '', vehicleId: '', activityIds: [], clientNotes: 'Drive to the heights of Gulmarg.', internalNotes: '' },
+      { id: 'js6-4', dayNumber: 4, title: 'Gulmarg to Srinagar', location: 'Srinagar', hotelId: '', vehicleId: '', activityIds: ['a2'], clientNotes: 'Return to Srinagar.', internalNotes: '' },
+      { id: 'js6-5', dayNumber: 5, title: 'Srinagar Local & Shikara', location: 'Srinagar', hotelId: '', vehicleId: '', activityIds: ['a1'], clientNotes: 'Mughal Gardens and Lake.', internalNotes: '' },
+      { id: 'js6-6', dayNumber: 6, title: 'Departure from Srinagar', location: 'Srinagar', hotelId: '', vehicleId: '', activityIds: [], clientNotes: 'Transfer to Srinagar Airport.', internalNotes: '' }
     ]
   }
 ];

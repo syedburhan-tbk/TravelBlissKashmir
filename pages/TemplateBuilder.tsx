@@ -17,16 +17,51 @@ import {
   Filter,
   MapPinned,
   ShieldCheck,
-  XCircle
+  XCircle,
+  Repeat
 } from 'lucide-react';
 import { MOCK_TEMPLATES, HOTELS, VEHICLES, ACTIVITIES, TripTemplate, DEFAULT_INCLUSIONS, DEFAULT_EXCLUSIONS } from '../constants';
 import { ItineraryDay, TripType, HotelCategory, Hotel } from '../types';
 import { generateDayDescription, suggestNextDayTitle } from '../services/geminiService';
+import { safeLocalStorage, STORAGE_KEYS } from '../utils/storage';
 
 const TemplateBuilder: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [template, setTemplate] = useState<TripTemplate | null>(null);
+  const [template, setTemplate] = useState<TripTemplate | null>(() => {
+    const tripId = window.location.hash.split('/').pop();
+    if (!tripId || tripId === 'new' || tripId === 'templates') {
+      return { 
+        id: `temp-${Date.now()}`, 
+        name: 'New Custom Template', 
+        duration: '1 Day', 
+        tripType: TripType.FAMILY, 
+        baseMargin: 15, 
+        itinerary: [],
+        inclusions: [...DEFAULT_INCLUSIONS],
+        exclusions: [...DEFAULT_EXCLUSIONS],
+        startLocation: 'Srinagar',
+        dropLocation: 'Srinagar'
+      };
+    }
+
+    const savedTemplatesRaw = safeLocalStorage.getItem(STORAGE_KEYS.TEMPLATES);
+    const savedTemplates = savedTemplatesRaw ? JSON.parse(savedTemplatesRaw) : [];
+    const merged = [...MOCK_TEMPLATES, ...savedTemplates];
+    const found = merged.find(t => t.id === tripId);
+    return found ? JSON.parse(JSON.stringify(found)) : { 
+      id: `temp-${Date.now()}`, 
+      name: 'New Custom Template', 
+      duration: '1 Day', 
+      tripType: TripType.FAMILY, 
+      baseMargin: 15, 
+      itinerary: [],
+      inclusions: [...DEFAULT_INCLUSIONS],
+      exclusions: [...DEFAULT_EXCLUSIONS],
+      startLocation: 'Srinagar',
+      dropLocation: 'Srinagar'
+    };
+  });
   const [activeDayIndex, setActiveDayIndex] = useState(0);
   const [isAiGenerating, setIsAiGenerating] = useState(false);
   const [hotelCategoryFilter, setHotelCategoryFilter] = useState<string>('All');
@@ -35,36 +70,37 @@ const TemplateBuilder: React.FC = () => {
 
   // Combined master hotels (mock + local)
   const masterHotels = useMemo(() => {
-    const saved = localStorage.getItem('et_hotels');
+    const saved = safeLocalStorage.getItem(STORAGE_KEYS.HOTELS);
     const custom = saved ? JSON.parse(saved) : [];
     const customIds = new Set(custom.map((h: Hotel) => h.id));
     return [...HOTELS.filter(h => !customIds.has(h.id)), ...custom];
   }, []);
 
   useEffect(() => {
-    const savedTemplatesRaw = localStorage.getItem('et_templates');
-    const savedTemplates = savedTemplatesRaw ? JSON.parse(savedTemplatesRaw) : [];
-    const merged = [...MOCK_TEMPLATES, ...savedTemplates];
-    const found = merged.find(t => t.id === id);
-    if (found) setTemplate(JSON.parse(JSON.stringify(found)));
-    else setTemplate({ 
-      id: `temp-${Date.now()}`, 
-      name: 'New Custom Template', 
-      duration: '1 Day', 
-      tripType: TripType.FAMILY, 
-      baseMargin: 15, 
-      itinerary: [],
-      inclusions: [...DEFAULT_INCLUSIONS],
-      exclusions: [...DEFAULT_EXCLUSIONS]
-    });
-  }, [id]);
+    const templateIdFromUrl = id || (window.location.hash.includes('/edit') ? window.location.hash.split('/edit')[0].split('/').pop() : window.location.hash.split('/').pop());
+    // Re-verify if id changes or not loaded
+    if (!template || template.id !== templateIdFromUrl) {
+      const savedTemplatesRaw = safeLocalStorage.getItem(STORAGE_KEYS.TEMPLATES);
+      const savedTemplates = savedTemplatesRaw ? JSON.parse(savedTemplatesRaw) : [];
+      const merged = [...MOCK_TEMPLATES, ...savedTemplates];
+      const found = merged.find(t => t.id === templateIdFromUrl);
+      if (found) {
+        Promise.resolve().then(() => setTemplate(JSON.parse(JSON.stringify(found))));
+      }
+    }
+  }, [id, template]);
 
   useEffect(() => {
     if (template?.itinerary[activeDayIndex]?.hotelId) {
       const currentHotel = masterHotels.find(h => h.id === template.itinerary[activeDayIndex].hotelId);
-      if (currentHotel) setHotelCategoryFilter(currentHotel.category);
-      else setHotelCategoryFilter('All');
-    } else setHotelCategoryFilter('All');
+      if (currentHotel) {
+        Promise.resolve().then(() => setHotelCategoryFilter(currentHotel.category));
+      } else {
+        Promise.resolve().then(() => setHotelCategoryFilter('All'));
+      }
+    } else {
+      Promise.resolve().then(() => setHotelCategoryFilter('All'));
+    }
   }, [activeDayIndex, template?.itinerary, masterHotels]);
 
   const filteredHotels = useMemo(() => {
@@ -76,14 +112,16 @@ const TemplateBuilder: React.FC = () => {
 
   const handleSave = () => {
     if (!template) return;
-    const savedTemplatesRaw = localStorage.getItem('et_templates');
-    let savedTemplates: TripTemplate[] = savedTemplatesRaw ? JSON.parse(savedTemplatesRaw) : [];
+    const savedTemplatesRaw = safeLocalStorage.getItem(STORAGE_KEYS.TEMPLATES);
+    const savedTemplates: TripTemplate[] = savedTemplatesRaw ? JSON.parse(savedTemplatesRaw) : [];
     const index = savedTemplates.findIndex(t => t.id === template.id);
     if (index > -1) savedTemplates[index] = template;
     else savedTemplates.push(template);
-    localStorage.setItem('et_templates', JSON.stringify(savedTemplates));
-    alert("Template updated successfully!");
-    navigate('/templates');
+    const success = safeLocalStorage.setItem(STORAGE_KEYS.TEMPLATES, JSON.stringify(savedTemplates));
+    if (success) {
+      alert("Template updated successfully!");
+      navigate('/templates');
+    }
   };
 
   const updateDay = (index: number, updates: Partial<ItineraryDay>) => {
@@ -150,6 +188,14 @@ const TemplateBuilder: React.FC = () => {
     setTemplate({ ...template, inclusions: updated });
   };
 
+  const swapInToEx = (index: number) => {
+    if (!template) return;
+    const item = template.inclusions[index];
+    const newInclusions = template.inclusions.filter((_, i) => i !== index);
+    const newExclusions = [...(template.exclusions || []), item];
+    setTemplate({ ...template, inclusions: newInclusions, exclusions: newExclusions });
+  };
+
   const addExclusion = () => {
     if (!template || !newExclusion.trim()) return;
     setTemplate({ ...template, exclusions: [...(template.exclusions || []), newExclusion.trim()] });
@@ -160,6 +206,14 @@ const TemplateBuilder: React.FC = () => {
     const updated = [...template.exclusions];
     updated.splice(index, 1);
     setTemplate({ ...template, exclusions: updated });
+  };
+
+  const swapExToIn = (index: number) => {
+    if (!template) return;
+    const item = template.exclusions[index];
+    const newExclusions = template.exclusions.filter((_, i) => i !== index);
+    const newInclusions = [...(template.inclusions || []), item];
+    setTemplate({ ...template, inclusions: newInclusions, exclusions: newExclusions });
   };
 
   return (
@@ -177,8 +231,8 @@ const TemplateBuilder: React.FC = () => {
           <div className="bg-white border border-slate-200 rounded-2xl p-6 space-y-4 shadow-sm text-slate-900">
             <h3 className="font-bold text-slate-800 flex items-center gap-2 text-sm uppercase tracking-widest"><Settings size={16} className="text-blue-600" />General Info</h3>
             <div className="space-y-4">
-              <div className="space-y-1"><label className="text-[10px] font-black uppercase text-slate-400">Template Name</label><input type="text" value={template.name} onChange={(e) => setTemplate({ ...template, name: e.target.value })} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold" /></div>
-              <div className="space-y-1"><label className="text-[10px] font-black uppercase text-slate-400">Trip Type</label><select value={template.tripType} onChange={(e) => setTemplate({ ...template, tripType: e.target.value as TripType })} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold">{Object.values(TripType).map(t => <option key={t} value={t}>{t}</option>)}</select></div>
+              <div className="space-y-1"><label className="text-[10px] font-black uppercase text-slate-400">Template Name</label><input type="text" value={template.name || ''} onChange={(e) => setTemplate({ ...template, name: e.target.value })} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold" /></div>
+              <div className="space-y-1"><label className="text-[10px] font-black uppercase text-slate-400">Trip Type</label><select value={template.tripType || ''} onChange={(e) => setTemplate({ ...template, tripType: e.target.value as TripType })} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold">{Object.values(TripType).map(t => <option key={t} value={t}>{t}</option>)}</select></div>
             </div>
           </div>
 
@@ -188,14 +242,17 @@ const TemplateBuilder: React.FC = () => {
               {template.inclusions.map((item, idx) => (
                 <div key={idx} className="flex items-center gap-2 group">
                   <div className="flex-1 text-[10px] font-bold text-slate-600 bg-emerald-50 p-2 rounded-lg line-clamp-2">{item}</div>
-                  <button onClick={() => removeInclusion(idx)} className="text-slate-300 hover:text-rose-500"><Trash2 size={12}/></button>
+                  <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={() => swapInToEx(idx)} className="p-1 text-slate-300 hover:text-blue-500 transition-colors" title="Move to Exclusions"><Repeat size={12}/></button>
+                    <button onClick={() => removeInclusion(idx)} className="p-1 text-slate-300 hover:text-rose-500 transition-colors"><Trash2 size={12}/></button>
+                  </div>
                 </div>
               ))}
               <div className="flex gap-1 mt-2">
                 <input 
                   type="text" 
                   placeholder="New..." 
-                  value={newInclusion}
+                  value={newInclusion || ''}
                   onChange={(e) => setNewInclusion(e.target.value)}
                   className="flex-1 text-[10px] p-2 border border-slate-200 rounded-lg outline-none"
                 />
@@ -210,14 +267,17 @@ const TemplateBuilder: React.FC = () => {
               {template.exclusions.map((item, idx) => (
                 <div key={idx} className="flex items-center gap-2 group">
                   <div className="flex-1 text-[10px] font-bold text-slate-600 bg-rose-50 p-2 rounded-lg line-clamp-2">{item}</div>
-                  <button onClick={() => removeExclusion(idx)} className="text-slate-300 hover:text-rose-500"><Trash2 size={12}/></button>
+                  <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={() => swapExToIn(idx)} className="p-1 text-slate-300 hover:text-blue-500 transition-colors" title="Move to Inclusions"><Repeat size={12}/></button>
+                    <button onClick={() => removeExclusion(idx)} className="p-1 text-slate-300 hover:text-rose-500 transition-colors"><Trash2 size={12}/></button>
+                  </div>
                 </div>
               ))}
               <div className="flex gap-1 mt-2">
                 <input 
                   type="text" 
                   placeholder="New..." 
-                  value={newExclusion}
+                  value={newExclusion || ''}
                   onChange={(e) => setNewExclusion(e.target.value)}
                   className="flex-1 text-[10px] p-2 border border-slate-200 rounded-lg outline-none"
                 />
@@ -258,7 +318,7 @@ const TemplateBuilder: React.FC = () => {
                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Step Title</label>
                 <input 
                   type="text" 
-                  value={template.itinerary[activeDayIndex].title} 
+                  value={template.itinerary[activeDayIndex].title || ''} 
                   onChange={(e) => updateDay(activeDayIndex, { title: e.target.value })} 
                   className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-2xl font-black text-slate-900 focus:bg-white focus:ring-4 focus:ring-blue-100 transition-all outline-none placeholder:text-slate-300 shadow-inner"
                   placeholder="Step title..." 
@@ -268,7 +328,7 @@ const TemplateBuilder: React.FC = () => {
                 <div className="space-y-4">
                   <div className="flex flex-col gap-3">
                     <label className="text-sm font-bold text-slate-700 flex items-center gap-2"><HotelIcon size={16} className="text-blue-500" />Standard Stay</label>
-                    <select value={template.itinerary[activeDayIndex].hotelId} onChange={(e) => updateDay(activeDayIndex, { hotelId: e.target.value })} className="w-full p-3 bg-white border border-slate-200 rounded-xl text-sm font-black text-slate-900 shadow-sm">
+                    <select value={template.itinerary[activeDayIndex].hotelId || ''} onChange={(e) => updateDay(activeDayIndex, { hotelId: e.target.value })} className="w-full p-3 bg-white border border-slate-200 rounded-xl text-sm font-black text-slate-900 shadow-sm">
                       <option value="">Select Hotel</option>
                       {masterHotels.map(h => <option key={h.id} value={h.id}>{h.name} ({h.location})</option>)}
                     </select>
@@ -276,13 +336,13 @@ const TemplateBuilder: React.FC = () => {
                 </div>
                 <div className="space-y-4">
                   <label className="text-sm font-bold text-slate-700 flex items-center gap-2"><CarIcon size={16} className="text-blue-500" />Standard Vehicle</label>
-                  <select value={template.itinerary[activeDayIndex].vehicleId} onChange={(e) => updateDay(activeDayIndex, { vehicleId: e.target.value })} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-900">
+                  <select value={template.itinerary[activeDayIndex].vehicleId || ''} onChange={(e) => updateDay(activeDayIndex, { vehicleId: e.target.value })} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-900">
                     <option value="">Select Suggested Vehicle</option>
                     {VEHICLES.map(v => <option key={v.id} value={v.id}>{v.type}</option>)}
                   </select>
                 </div>
               </div>
-              <textarea rows={6} value={template.itinerary[activeDayIndex].clientNotes} onChange={(e) => updateDay(activeDayIndex, { clientNotes: e.target.value })} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm leading-relaxed text-slate-900 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Describe what the guest will experience..." />
+              <textarea rows={6} value={template.itinerary[activeDayIndex].clientNotes || ''} onChange={(e) => updateDay(activeDayIndex, { clientNotes: e.target.value })} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm leading-relaxed text-slate-900 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Describe what the guest will experience..." />
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center h-96 bg-white border-2 border-dashed border-slate-200 rounded-2xl text-slate-400"><Layers size={64} className="mb-4 opacity-10" /><p className="font-bold">Add steps to this template.</p></div>

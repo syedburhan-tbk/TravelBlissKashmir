@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { useStorageSync } from '../hooks/useStorageSync';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, 
@@ -41,10 +42,51 @@ import { MOCK_LEADS, MOCK_TRIPS } from '../constants';
 import { suggestFollowUp, draftWhatsAppMessage } from '../services/geminiService';
 import { sendSimulatedMessage, DEFAULT_TEMPLATES, saveMessageLog, getMessageLogsForLead } from '../services/messagingService';
 
+import { safeLocalStorage, STORAGE_KEYS } from '../utils/storage';
+
+const generateActId = () => `act-${Date.now()}`;
+const generateCommId = () => `c-${Date.now()}`;
+const generateFUId = () => `f-${Date.now()}`;
+
+const recordActivity = (updatedLead: Lead, type: LeadActivity['type'], description: string, meta?: any) => {
+  const activity: LeadActivity = {
+    id: generateActId(),
+    leadId: updatedLead.id,
+    type,
+    timestamp: new Date().toISOString(),
+    description,
+    meta
+  };
+  updatedLead.activities = [activity, ...(updatedLead.activities || [])];
+  updatedLead.updatedAt = new Date().toISOString();
+  return updatedLead;
+};
+
 const LeadProfile: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [lead, setLead] = useState<Lead | null>(null);
+  
+  const [lead, setLead] = useState<Lead | null>(() => {
+    try {
+      const savedLeads = safeLocalStorage.getItem(STORAGE_KEYS.LEADS);
+      let allLeads: Lead[] = MOCK_LEADS;
+      if (savedLeads) {
+        const parsed = JSON.parse(savedLeads);
+        if (Array.isArray(parsed)) allLeads = parsed;
+      }
+      
+      const found = allLeads.find((l: Lead) => l.id === id);
+      if (found) {
+        if (!found.activities) found.activities = [];
+        if (found.whatsappOptIn === undefined) found.whatsappOptIn = true;
+        return found;
+      }
+    } catch (e) {
+      console.error('Failed to initialize lead:', e);
+    }
+    return null;
+  });
+
   const [activeTab, setActiveTab] = useState<'overview' | 'trips' | 'timeline' | 'messaging' | 'followups'>('overview');
   const [newLog, setNewLog] = useState('');
   
@@ -63,45 +105,57 @@ const LeadProfile: React.FC = () => {
 
   // Messaging States
   const [isSending, setIsSending] = useState(false);
-  const [messageLogs, setMessageLogs] = useState<MessageLog[]>([]);
+  const [messageLogs, setMessageLogs] = useState<MessageLog[]>(() => {
+    return id ? getMessageLogsForLead(id) : [];
+  });
 
   useEffect(() => {
-    const savedLeads = localStorage.getItem('et_leads');
-    const allLeads = savedLeads ? JSON.parse(savedLeads) : MOCK_LEADS;
-    const found = allLeads.find((l: Lead) => l.id === id);
-    if (found) {
-      if (!found.activities) found.activities = [];
-      if (found.whatsappOptIn === undefined) found.whatsappOptIn = true;
-      setLead(found);
-      setMessageLogs(getMessageLogsForLead(found.id));
-    }
-  }, [id]);
-
-  const recordActivity = (updatedLead: Lead, type: LeadActivity['type'], description: string, meta?: any) => {
-    const activity: LeadActivity = {
-      id: `act-${Date.now()}`,
-      leadId: updatedLead.id,
-      type,
-      timestamp: new Date().toISOString(),
-      description,
-      meta
+    // If id changes, we need to re-sync. To avoid "synchronous setState" warning,
+    // we use a microtask or just an async check.
+    const syncLead = async () => {
+      try {
+        const savedLeads = safeLocalStorage.getItem(STORAGE_KEYS.LEADS);
+        let allLeads: Lead[] = MOCK_LEADS;
+        if (savedLeads) {
+          const parsed = JSON.parse(savedLeads);
+          if (Array.isArray(parsed)) allLeads = parsed;
+        }
+        
+        const found = allLeads.find((l: Lead) => l.id === id);
+        if (found && found.id !== lead?.id) {
+          if (!found.activities) found.activities = [];
+          if (found.whatsappOptIn === undefined) found.whatsappOptIn = true;
+          setLead(found);
+          setMessageLogs(getMessageLogsForLead(found.id));
+        }
+      } catch (e) {
+        console.error('Failed to sync lead:', e);
+      }
     };
-    updatedLead.activities = [activity, ...(updatedLead.activities || [])];
-    updatedLead.updatedAt = new Date().toISOString();
-    return updatedLead;
-  };
+    
+    syncLead();
+  }, [id, lead?.id]);
 
   const updateLeadInStorage = (updatedLead: Lead) => {
     setLead(updatedLead);
-    const savedLeads = localStorage.getItem('et_leads');
-    const allLeads = savedLeads ? JSON.parse(savedLeads) : [...MOCK_LEADS];
-    const index = allLeads.findIndex((l: Lead) => l.id === updatedLead.id);
-    if (index > -1) {
-      allLeads[index] = updatedLead;
-    } else {
-      allLeads.push(updatedLead);
+    try {
+      const savedLeads = safeLocalStorage.getItem(STORAGE_KEYS.LEADS);
+      let allLeads: Lead[] = [...MOCK_LEADS];
+      if (savedLeads) {
+        const parsed = JSON.parse(savedLeads);
+        if (Array.isArray(parsed)) allLeads = parsed;
+      }
+      
+      const index = allLeads.findIndex((l: Lead) => l.id === updatedLead.id);
+      if (index > -1) {
+        allLeads[index] = updatedLead;
+      } else {
+        allLeads.push(updatedLead);
+      }
+      safeLocalStorage.setItem(STORAGE_KEYS.LEADS, JSON.stringify(allLeads));
+    } catch (e) {
+      console.error('Failed to update leads in storage:', e);
     }
-    localStorage.setItem('et_leads', JSON.stringify(allLeads));
   };
 
   const handleManualMessage = async (templateId: string) => {
@@ -135,7 +189,7 @@ const LeadProfile: React.FC = () => {
   const addCommunicationLog = (type: CommunicationLog['type'] = 'Note', content: string = newLog) => {
     if (!lead || !content.trim()) return;
     const log: CommunicationLog = {
-      id: `c-${Date.now()}`,
+      id: generateCommId(),
       type,
       timestamp: new Date().toISOString(),
       content,
@@ -170,7 +224,7 @@ const LeadProfile: React.FC = () => {
     if (!lead || !fuFormData.note.trim()) return;
 
     const newFollowUp: FollowUp = {
-      id: `f-${Date.now()}`,
+      id: generateFUId(),
       date: fuFormData.date,
       status: 'Pending',
       type: fuFormData.type,
@@ -222,9 +276,28 @@ const LeadProfile: React.FC = () => {
     setEditingLead(null);
   };
 
-  if (!lead) return <div className="p-20 text-center font-black text-slate-300 uppercase tracking-widest">LOADING LEAD...</div>;
+  const [allTrips, setAllTrips] = useState<Trip[]>(() => {
+    try {
+      const savedTrips = safeLocalStorage.getItem(STORAGE_KEYS.TRIPS);
+      return savedTrips ? JSON.parse(savedTrips) : MOCK_TRIPS;
+    } catch (e) {
+      console.error('LeadProfile: Failed to load trips:', e);
+      return MOCK_TRIPS;
+    }
+  });
 
-  const leadTrips = MOCK_TRIPS.filter(t => t.leadId === lead.id);
+  // Sync trips across tabs
+  useStorageSync(STORAGE_KEYS.TRIPS, allTrips, setAllTrips, MOCK_TRIPS);
+
+  const leadTrips = useMemo(() => {
+    return allTrips.filter(t => t.leadId === lead?.id);
+  }, [allTrips, lead?.id]);
+
+  if (!lead) return <div className="p-20 text-center font-black text-slate-300 uppercase tracking-widest flex flex-col items-center gap-4">
+    <Loader2 className="animate-spin" size={48} />
+    LOADING LEAD...
+  </div>;
+
   const pendingFollowUps = lead.followUps.filter(f => f.status === 'Pending');
 
   return (
@@ -430,7 +503,7 @@ const LeadProfile: React.FC = () => {
                      </button>
                   </div>
                   {leadTrips.map(trip => (
-                     <div key={trip.id} onClick={() => navigate(`/trips/${trip.id}`)} className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm flex items-center justify-between group hover:border-blue-200 transition-all cursor-pointer">
+                     <div key={trip.id} onClick={() => navigate(`/trips/${trip.id}`)} className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm flex items-center justify-between group hover:border-blue-200 transition-all cursor-pointer relative overflow-hidden">
                         <div className="flex items-center gap-6">
                            <div className="bg-blue-50 p-4 rounded-2xl text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-all">
                               <Map size={24}/>
@@ -452,7 +525,24 @@ const LeadProfile: React.FC = () => {
                               <p className="text-[9px] font-black uppercase text-slate-300">Status</p>
                               <p className="text-[10px] font-black uppercase text-emerald-600">{trip.status}</p>
                            </div>
-                           <ChevronRight size={20} className="text-slate-200 group-hover:text-blue-600 group-hover:translate-x-1 transition-all" />
+                           <div className="flex items-center gap-2">
+                             <button 
+                               onClick={async (e) => {
+                                 e.stopPropagation();
+                                 if (window.confirm("Permanently delete this trip from your records? This action cannot be undone.")) {
+                                   await tripService.deleteTrip(trip.id);
+                                   const updatedTrips = allTrips.filter(t => t.id !== trip.id);
+                                   safeLocalStorage.setItem(STORAGE_KEYS.TRIPS, JSON.stringify(updatedTrips));
+                                   setAllTrips(updatedTrips);
+                                 }
+                               }}
+                               className="p-3 bg-slate-50 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-2xl opacity-0 group-hover:opacity-100 transition-all border border-slate-100 hover:border-rose-200"
+                               title="Delete Trip"
+                             >
+                                <Trash2 size={20} />
+                             </button>
+                             <ChevronRight size={20} className="text-slate-200 group-hover:text-blue-600 group-hover:translate-x-1 transition-all" />
+                           </div>
                         </div>
                      </div>
                   ))}
@@ -604,18 +694,18 @@ const LeadProfile: React.FC = () => {
                 <div className="grid grid-cols-2 gap-6">
                    <div className="space-y-1">
                       <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Full Name</label>
-                      <input required type="text" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none text-slate-900 focus:ring-4 focus:ring-blue-50 transition-all" value={editingLead.name} onChange={e => setEditingLead({...editingLead, name: e.target.value})} />
+                      <input required type="text" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none text-slate-900 focus:ring-4 focus:ring-blue-50 transition-all" value={editingLead.name || ''} onChange={e => setEditingLead({...editingLead, name: e.target.value})} />
                    </div>
                    <div className="space-y-1">
                       <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Phone</label>
-                      <input required type="text" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none text-slate-900 focus:ring-4 focus:ring-blue-50 transition-all" value={editingLead.phone} onChange={e => setEditingLead({...editingLead, phone: e.target.value})} />
+                      <input required type="text" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none text-slate-900 focus:ring-4 focus:ring-blue-50 transition-all" value={editingLead.phone || ''} onChange={e => setEditingLead({...editingLead, phone: e.target.value})} />
                    </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-6">
                    <div className="space-y-1">
                       <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Email</label>
-                      <input type="email" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none text-slate-900 focus:ring-4 focus:ring-blue-50 transition-all" value={editingLead.email} onChange={e => setEditingLead({...editingLead, email: e.target.value})} />
+                      <input type="email" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none text-slate-900 focus:ring-4 focus:ring-blue-50 transition-all" value={editingLead.email || ''} onChange={e => setEditingLead({...editingLead, email: e.target.value})} />
                    </div>
                    <div className="space-y-1">
                       <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Priority Score</label>
@@ -628,21 +718,21 @@ const LeadProfile: React.FC = () => {
                 <div className="grid grid-cols-3 gap-4">
                    <div className="space-y-1">
                       <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Travel Month</label>
-                      <input type="text" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none text-slate-900 focus:ring-4 focus:ring-blue-50 transition-all" value={editingLead.travelMonth} onChange={e => setEditingLead({...editingLead, travelMonth: e.target.value})} />
+                      <input type="text" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none text-slate-900 focus:ring-4 focus:ring-blue-50 transition-all" value={editingLead.travelMonth || ''} onChange={e => setEditingLead({...editingLead, travelMonth: e.target.value})} />
                    </div>
                    <div className="space-y-1">
                       <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Budget</label>
-                      <input type="text" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none text-slate-900 focus:ring-4 focus:ring-blue-50 transition-all" value={editingLead.budgetRange} onChange={e => setEditingLead({...editingLead, budgetRange: e.target.value})} />
+                      <input type="text" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none text-slate-900 focus:ring-4 focus:ring-blue-50 transition-all" value={editingLead.budgetRange || ''} onChange={e => setEditingLead({...editingLead, budgetRange: e.target.value})} />
                    </div>
                    <div className="space-y-1">
                       <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Pax</label>
-                      <input type="number" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none text-slate-900 focus:ring-4 focus:ring-blue-50 transition-all" value={editingLead.pax} onChange={e => setEditingLead({...editingLead, pax: parseInt(e.target.value)})} />
+                      <input type="number" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none text-slate-900 focus:ring-4 focus:ring-blue-50 transition-all" value={editingLead.pax || 0} onChange={e => setEditingLead({...editingLead, pax: parseInt(e.target.value)})} />
                    </div>
                 </div>
 
                 <div className="space-y-1">
                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Sales Notes</label>
-                   <textarea rows={4} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-medium outline-none text-slate-900 focus:ring-4 focus:ring-blue-50 transition-all" value={editingLead.notes} onChange={e => setEditingLead({...editingLead, notes: e.target.value})} />
+                   <textarea rows={4} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-medium outline-none text-slate-900 focus:ring-4 focus:ring-blue-50 transition-all" value={editingLead.notes || ''} onChange={e => setEditingLead({...editingLead, notes: e.target.value})} />
                 </div>
 
                 <div className="pt-4 flex gap-4">

@@ -5,70 +5,148 @@ import { ArrowLeft, User, Phone, Mail, Globe, Calendar, Users, Briefcase, Chevro
 import { TripType, TripStatus, Trip } from '../types';
 import { MOCK_TEMPLATES, MOCK_TRIPS, BRAND_CONFIG, TripTemplate, DEFAULT_INCLUSIONS, DEFAULT_EXCLUSIONS, MOCK_LEADS } from '../constants';
 
+import { populateItineraryWithRandomImages } from '../services/assetService';
+import { safeLocalStorage, STORAGE_KEYS } from '../utils/storage';
+
 const NewTrip: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [step, setStep] = useState(1);
-  const [allTemplates, setAllTemplates] = useState<TripTemplate[]>([]);
-  const [formData, setFormData] = useState({
-    clientName: '',
-    phone: '',
-    email: '',
-    source: 'Website',
-    tripName: '',
-    tripType: TripType.FAMILY,
-    pax: 2,
-    startDate: '',
-    endDate: '',
-    templateId: 'blank',
-    startLocation: 'Srinagar' as 'Srinagar' | 'Jammu',
-    leadId: ''
+  const [allTemplates, setAllTemplates] = useState<TripTemplate[]>(() => {
+    const savedTemplatesRaw = safeLocalStorage.getItem(STORAGE_KEYS.TEMPLATES);
+    let savedTemplates: TripTemplate[] = [];
+    try {
+      if (savedTemplatesRaw) {
+        const parsed = JSON.parse(savedTemplatesRaw);
+        if (Array.isArray(parsed)) savedTemplates = parsed;
+      }
+    } catch (e) {
+      console.error('Failed to parse templates in NewTrip:', e);
+    }
+    return [...MOCK_TEMPLATES, ...savedTemplates];
+  });
+  const [formData, setFormData] = useState(() => {
+    const queryParams = new URLSearchParams(location.search);
+    const templateId = queryParams.get('templateId');
+    const leadId = queryParams.get('leadId');
+
+    const initialState = {
+      clientName: '',
+      phone: '',
+      email: '',
+      source: 'Website',
+      tripName: '',
+      tripType: TripType.FAMILY,
+      pax: 2,
+      startDate: '',
+      endDate: '',
+      templateId: 'blank',
+      startLocation: 'Srinagar' as 'Srinagar' | 'Jammu',
+      leadId: ''
+    };
+
+    if (templateId) {
+      // Note: allTemplates isn't available yet in the same initializer, 
+      // but we can load templates specifically for this check or just rely on merged if we move merged logic up.
+      // Actually, it's better to just do the localStorage check again if needed or use merged logic.
+      const savedTemplatesRaw = safeLocalStorage.getItem(STORAGE_KEYS.TEMPLATES);
+      let savedTemplates: TripTemplate[] = [];
+      try {
+        if (savedTemplatesRaw) {
+          const parsed = JSON.parse(savedTemplatesRaw);
+          if (Array.isArray(parsed)) savedTemplates = parsed;
+        }
+      } catch (e) {
+        console.warn('NewTrip: Failed to parse templates:', e);
+      }
+      const merged = [...MOCK_TEMPLATES, ...savedTemplates];
+      const template = merged.find(t => t.id === templateId);
+      if (template) {
+        initialState.templateId = templateId;
+        initialState.tripType = template.tripType;
+      }
+    }
+
+    if (leadId) {
+      const savedLeadsRaw = safeLocalStorage.getItem(STORAGE_KEYS.LEADS);
+      let allLeads = MOCK_LEADS;
+      try {
+        if (savedLeadsRaw) {
+          const parsed = JSON.parse(savedLeadsRaw);
+          if (Array.isArray(parsed)) allLeads = parsed;
+        }
+      } catch (e) {
+        console.warn('NewTrip initializer: Failed to parse leads:', e);
+      }
+      const foundLead = allLeads.find((l: any) => l.id === leadId);
+      if (foundLead) {
+        initialState.leadId = leadId;
+        initialState.clientName = foundLead.name;
+        initialState.phone = foundLead.phone;
+        initialState.email = foundLead.email;
+        initialState.source = foundLead.source;
+        initialState.pax = foundLead.pax;
+        initialState.tripType = foundLead.interest;
+      } else {
+        initialState.leadId = leadId;
+      }
+    }
+
+    return initialState;
   });
 
   useEffect(() => {
-    // Load combined templates
-    const savedTemplatesRaw = localStorage.getItem('et_templates');
-    const savedTemplates = savedTemplatesRaw ? JSON.parse(savedTemplatesRaw) : [];
-    const merged = [...MOCK_TEMPLATES, ...savedTemplates];
-    setAllTemplates(merged);
-
-    // Check for pre-selected template and lead from URL
+    // If URL parameters change after initial mount, we update state.
+    // This is safe because it's reacting to external changes (location.search).
     const queryParams = new URLSearchParams(location.search);
     const templateId = queryParams.get('templateId');
     const leadId = queryParams.get('leadId');
 
     if (templateId) {
-      const template = merged.find(t => t.id === templateId);
-      if (template) {
-        setFormData(prev => ({ 
-          ...prev, 
-          templateId, 
-          tripType: template.tripType 
-        }));
+      const template = allTemplates.find(t => t.id === templateId);
+      if (template && formData.templateId !== templateId) {
+        Promise.resolve().then(() => {
+          setFormData(prev => ({ 
+            ...prev, 
+            templateId, 
+            tripType: template.tripType 
+          }));
+        });
       }
     }
 
-    // Pre-fill lead data if leadId is provided in URL
-    if (leadId) {
-      const savedLeadsRaw = localStorage.getItem('et_leads');
-      const allLeads = savedLeadsRaw ? JSON.parse(savedLeadsRaw) : MOCK_LEADS;
+    if (leadId && formData.leadId !== leadId) {
+      const savedLeadsRaw = safeLocalStorage.getItem(STORAGE_KEYS.LEADS);
+      let allLeads = MOCK_LEADS;
+      try {
+        if (savedLeadsRaw) {
+          const parsed = JSON.parse(savedLeadsRaw);
+          if (Array.isArray(parsed)) allLeads = parsed;
+        }
+      } catch (e) {
+        console.warn('NewTrip effect: Failed to parse leads:', e);
+      }
       const foundLead = allLeads.find((l: any) => l.id === leadId);
       if (foundLead) {
-        setFormData(prev => ({
-          ...prev,
-          leadId,
-          clientName: foundLead.name,
-          phone: foundLead.phone,
-          email: foundLead.email,
-          source: foundLead.source,
-          pax: foundLead.pax,
-          tripType: foundLead.interest
-        }));
+        Promise.resolve().then(() => {
+          setFormData(prev => ({
+            ...prev,
+            leadId,
+            clientName: foundLead.name,
+            phone: foundLead.phone,
+            email: foundLead.email,
+            source: foundLead.source,
+            pax: foundLead.pax,
+            tripType: foundLead.interest
+          }));
+        });
       } else {
-        setFormData(prev => ({ ...prev, leadId }));
+        Promise.resolve().then(() => {
+          setFormData(prev => ({ ...prev, leadId }));
+        });
       }
     }
-  }, [location.search]);
+  }, [location.search, allTemplates, formData.leadId, formData.templateId]);
 
   const handleNext = () => setStep(step + 1);
   const handleBack = () => setStep(step - 1);
@@ -77,47 +155,75 @@ const NewTrip: React.FC = () => {
     e.preventDefault();
     
     // Fetch current Master Terms
-    const masterInc = localStorage.getItem('et_master_inclusions');
-    const masterExc = localStorage.getItem('et_master_exclusions');
-    const currentMasterInclusions = masterInc ? JSON.parse(masterInc) : [...DEFAULT_INCLUSIONS];
-    const currentMasterExclusions = masterExc ? JSON.parse(masterExc) : [...DEFAULT_EXCLUSIONS];
+    const masterInc = safeLocalStorage.getItem(STORAGE_KEYS.MASTER_INCLUSIONS);
+    const masterExc = safeLocalStorage.getItem(STORAGE_KEYS.MASTER_EXCLUSIONS);
+    let currentMasterInclusions = [...DEFAULT_INCLUSIONS];
+    let currentMasterExclusions = [...DEFAULT_EXCLUSIONS];
 
-    const newId = `trip-${Date.now()}`;
-    const selectedTemplate = allTemplates.find(t => t.id === formData.templateId);
-    
-    const newTrip: Trip = {
-      id: newId,
-      leadId: formData.leadId,
-      client: {
-        name: formData.clientName,
-        phone: formData.phone,
-        email: formData.email,
-        source: formData.source,
-      },
-      tripName: formData.tripName || `${formData.clientName}'s Kashmir Trip`,
-      tripType: formData.tripType,
-      startDate: formData.startDate,
-      endDate: formData.endDate,
-      pax: formData.pax,
-      budgetRange: 'TBD',
-      assignedSalesperson: 'Adil Bakshi',
-      status: TripStatus.LEAD,
-      marginPercentage: selectedTemplate?.baseMargin || BRAND_CONFIG.defaultMargin,
-      addOnIds: [],
-      itinerary: selectedTemplate ? JSON.parse(JSON.stringify(selectedTemplate.itinerary)) : [],
-      versions: [],
-      startLocation: formData.startLocation,
-      // If blank trip, use Master Database Terms. If template, use Template Terms.
-      inclusions: selectedTemplate ? [...selectedTemplate.inclusions] : currentMasterInclusions,
-      exclusions: selectedTemplate ? [...selectedTemplate.exclusions] : currentMasterExclusions
-    };
+    try {
+      if (masterInc) {
+        const parsed = JSON.parse(masterInc);
+        if (Array.isArray(parsed)) currentMasterInclusions = parsed;
+      }
+      if (masterExc) {
+        const parsed = JSON.parse(masterExc);
+        if (Array.isArray(parsed)) currentMasterExclusions = parsed;
+      }
+    } catch (e) {
+      console.error('Failed to parse master terms:', e);
+    }
 
-    const savedTripsRaw = localStorage.getItem('et_trips');
-    const allTrips: Trip[] = savedTripsRaw ? JSON.parse(savedTripsRaw) : [...MOCK_TRIPS];
-    allTrips.push(newTrip);
-    localStorage.setItem('et_trips', JSON.stringify(allTrips));
+    try {
+      const newId = `trip-${Date.now()}`;
+      const selectedTemplate = allTemplates.find(t => t.id === formData.templateId);
+      
+      const newTrip: Trip = {
+        id: newId,
+        leadId: formData.leadId,
+        client: {
+          name: formData.clientName,
+          phone: formData.phone,
+          email: formData.email,
+          source: formData.source,
+        },
+        tripName: formData.tripName || `${formData.clientName}'s Kashmir Trip`,
+        tripType: formData.tripType,
+        startDate: formData.startDate,
+        endDate: formData.endDate,
+        pax: formData.pax,
+        budgetRange: 'TBD',
+        assignedSalesperson: 'Adil Bakshi',
+        status: TripStatus.LEAD,
+        marginPercentage: selectedTemplate?.baseMargin || BRAND_CONFIG.defaultMargin,
+        addOnIds: [],
+        itinerary: selectedTemplate ? populateItineraryWithRandomImages(JSON.parse(JSON.stringify(selectedTemplate.itinerary))) : [],
+        versions: [],
+        startLocation: formData.startLocation,
+        // If blank trip, use Master Database Terms. If template, use Template Terms.
+        inclusions: selectedTemplate ? [...selectedTemplate.inclusions] : currentMasterInclusions,
+        exclusions: selectedTemplate ? [...selectedTemplate.exclusions] : currentMasterExclusions
+      };
 
-    navigate(`/trips/${newId}`); 
+      const savedTripsRaw = safeLocalStorage.getItem(STORAGE_KEYS.TRIPS);
+      let allTrips: Trip[] = [...MOCK_TRIPS];
+      try {
+        if (savedTripsRaw) {
+          const parsed = JSON.parse(savedTripsRaw);
+          if (Array.isArray(parsed)) allTrips = parsed;
+        }
+      } catch (e) {
+        console.error('Failed to parse trips on submit:', e);
+      }
+      allTrips.push(newTrip);
+      const success = safeLocalStorage.setItem(STORAGE_KEYS.TRIPS, JSON.stringify(allTrips));
+
+      if (success) {
+        navigate(`/trips/${newId}`); 
+      }
+    } catch (error) {
+      console.error('Error during trip creation:', error);
+      alert('Failed to create trip. Please check the console for more details.');
+    }
   };
 
   return (

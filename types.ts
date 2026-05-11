@@ -123,6 +123,13 @@ export interface AddOn {
   description?: string;
 }
 
+export interface DestinationImage {
+  id: string;
+  destination: string;
+  url: string;
+  category?: string;
+}
+
 export interface ItineraryDay {
   id: string;
   dayNumber: number;
@@ -136,6 +143,7 @@ export interface ItineraryDay {
   clientNotes: string;
   internalNotes: string;
   unionCabSelected?: boolean;
+  images?: string[];
 }
 
 export interface MessageTemplate {
@@ -238,6 +246,42 @@ export interface TripVersion {
   tierPrices: TierPrices;
 }
 
+export enum DayType {
+  ARRIVAL = 'Arrival',
+  TRANSFER = 'Transfer',
+  SIGHTSEEING = 'Sightseeing',
+  EXCURSION = 'Excursion',
+  DROP = 'Drop',
+  LEISURE = 'Leisure'
+}
+
+export interface ItineraryDayVariation {
+  id: string;
+  title: string;
+  dayType: DayType;
+  source: string;
+  destination: string;
+  routeType: 'Direct' | 'Via-Scenic' | 'Local' | 'Offbeat' | 'Trek';
+  experienceTags: string[];
+  stayType: 'Hotel' | 'Houseboat' | 'Camp' | 'None';
+  transferType: 'Private' | 'Union' | 'Self-Drive' | 'None';
+  recommendedAddOns: string[];
+  seasonalRelevance: ('Summer' | 'Winter' | 'Spring' | 'Autumn')[];
+  travelTimeApprox: string;
+  internalNotes: string;
+  customerDescription: string;
+  luxuryEnhancement?: string;
+}
+
+export interface ItineraryGenerationInput {
+  totalDays: number;
+  arrivalCity: string;
+  departureCity: string;
+  destinations: string[];
+  budgetLevel: 'prime' | 'elite' | 'signature';
+  tripType: TripType;
+}
+
 export interface Trip {
   id: string;
   leadId: string;
@@ -263,7 +307,9 @@ export interface Trip {
   marginPercentage: number; 
   tierMargins?: TierPrices; 
   addOnIds: string[];
+  vehicleSelection?: string;
   startLocation: 'Srinagar' | 'Jammu';
+  dropLocation?: 'Srinagar' | 'Jammu';
   inclusions: string[];
   exclusions: string[];
   hotelTiers?: HotelTierSelection[];
@@ -280,6 +326,8 @@ export interface TripTemplate {
   itinerary: ItineraryDay[];
   inclusions: string[];
   exclusions: string[];
+  startLocation?: 'Srinagar' | 'Jammu';
+  dropLocation?: 'Srinagar' | 'Jammu';
 }
 
 export type OpsAlertType = 'ARRIVAL' | 'DEPARTURE' | 'HOTEL_CHANGE' | 'PLAN_REMINDER';

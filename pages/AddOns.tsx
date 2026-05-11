@@ -4,11 +4,21 @@ import { Plus, Search, Sparkles, Trash2, Edit2, Check, X, IndianRupee, Users } f
 import { ADD_ONS } from '../constants';
 import { AddOn } from '../types';
 
+import { safeLocalStorage, STORAGE_KEYS } from '../utils/storage';
+
 const AddOns: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [customAddOns, setCustomAddOns] = useState<AddOn[]>([]);
+  const [customAddOns, setCustomAddOns] = useState<AddOn[]>(() => {
+    try {
+      const saved = safeLocalStorage.getItem(STORAGE_KEYS.ADD_ONS);
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      console.error('Failed to parse custom add-ons:', e);
+      return [];
+    }
+  });
   
   const [formData, setFormData] = useState<Partial<AddOn>>({
     name: '',
@@ -17,10 +27,6 @@ const AddOns: React.FC = () => {
     description: ''
   });
 
-  useEffect(() => {
-    const saved = localStorage.getItem('et_addons');
-    if (saved) setCustomAddOns(JSON.parse(saved));
-  }, []);
 
   const allAddOns = useMemo(() => {
     const customIds = new Set(customAddOns.map(a => a.id));
@@ -66,7 +72,7 @@ const AddOns: React.FC = () => {
     } else updated = [...customAddOns, newAddOn];
 
     setCustomAddOns(updated);
-    localStorage.setItem('et_addons', JSON.stringify(updated));
+    safeLocalStorage.setItem(STORAGE_KEYS.ADD_ONS, JSON.stringify(updated));
     setIsModalOpen(false);
   };
 
@@ -74,7 +80,7 @@ const AddOns: React.FC = () => {
     if (window.confirm("Remove this premium add-on?")) {
       const updated = customAddOns.filter(a => a.id !== id);
       setCustomAddOns(updated);
-      localStorage.setItem('et_addons', JSON.stringify(updated));
+      safeLocalStorage.setItem(STORAGE_KEYS.ADD_ONS, JSON.stringify(updated));
     }
   };
 
@@ -145,12 +151,12 @@ const AddOns: React.FC = () => {
             <form onSubmit={handleSave} className="p-6 space-y-6">
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Name</label>
-                <input required type="text" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-slate-900" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                <input required type="text" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-slate-900" value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Cost (INR)</label>
-                  <input required type="number" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-slate-900" value={formData.cost} onChange={e => setFormData({...formData, cost: parseInt(e.target.value)})} />
+                  <input required type="number" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-slate-900" value={formData.cost || 0} onChange={e => setFormData({...formData, cost: parseInt(e.target.value)})} />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Pricing Model</label>
@@ -162,7 +168,7 @@ const AddOns: React.FC = () => {
               </div>
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Description</label>
-                <textarea rows={3} className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none text-sm text-slate-900" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
+                <textarea rows={3} className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none text-sm text-slate-900" value={formData.description || ''} onChange={e => setFormData({...formData, description: e.target.value})} />
               </div>
               <button type="submit" className="w-full py-4 bg-blue-600 text-white font-black uppercase tracking-widest text-xs rounded-2xl shadow-xl hover:bg-blue-700 transition-all flex items-center justify-center gap-2">
                 <Check size={18} /> Save Add-on

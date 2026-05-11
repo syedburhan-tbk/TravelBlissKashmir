@@ -9,6 +9,7 @@ import {
   Map, 
   Hotel as HotelIcon, 
   Car, 
+  Image as ImageIcon,
   Sparkles,
   Settings,
   LogOut,
@@ -62,23 +63,77 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { signOut, user: authUser, userProfile } = useAuth();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
-  const [currentUser, setCurrentUser] = useState<TeamMember>(userProfile || DEFAULT_PERSONAS[0]);
-  const [teamMembers, setTeamMembers] = useState<TeamMember[]>(DEFAULT_PERSONAS);
-  const [agencyConfig, setAgencyConfig] = useState(BRAND_CONFIG);
-  const [alerts, setAlerts] = useState<{ id: string, title: string, desc: string, type: 'danger' | 'warning' | 'info' | 'success', leadId: string }[]>([]);
-  const [ongoingCount, setOngoingCount] = useState(0);
+  const [currentUser, setCurrentUser] = useState<TeamMember>(() => {
+    if (userProfile) return userProfile;
+    const savedMembers = localStorage.getItem('et_team_members');
+    let members: TeamMember[] = DEFAULT_PERSONAS;
+    try {
+      if (savedMembers) {
+        const parsed = JSON.parse(savedMembers);
+        if (Array.isArray(parsed)) members = parsed;
+      }
+    } catch (e) {
+      console.error('Failed to parse members for initial state:', e);
+    }
+    const activeId = localStorage.getItem('et_active_member_id');
+    return members.find(m => m.id === activeId) || members[0] || DEFAULT_PERSONAS[0];
+  });
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>(() => {
+    const savedMembers = localStorage.getItem('et_team_members');
+    try {
+      if (savedMembers) {
+        const parsed = JSON.parse(savedMembers);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {
+      console.error('Failed to parse members for initial state:', e);
+    }
+    return DEFAULT_PERSONAS;
+  });
+  const [agencyConfig, setAgencyConfig] = useState(() => {
+    const savedConfig = localStorage.getItem('et_brand_config');
+    try {
+      if (savedConfig) return JSON.parse(savedConfig);
+    } catch (e) {
+      console.error('Failed to parse brand config for initial state:', e);
+    }
+    return BRAND_CONFIG;
+  });
+  const [alerts] = useState<{ id: string, title: string, desc: string, type: 'danger' | 'warning' | 'info' | 'success', leadId: string }[]>([]);
+  const [ongoingCount, setOngoingCount] = useState(() => {
+    const savedTrips = localStorage.getItem('et_trips');
+    let tripsList: Trip[] = MOCK_TRIPS;
+    try {
+      if (savedTrips) {
+        const parsed = JSON.parse(savedTrips);
+        if (Array.isArray(parsed)) tripsList = parsed;
+      }
+    } catch (e) {
+      console.error('Failed to parse trips for initial state:', e);
+    }
+    const todayStr = new Date().toISOString().split('T')[0];
+    return tripsList.filter(t => t.status === TripStatus.BOOKED && t.startDate <= todayStr && t.endDate >= todayStr).length;
+  });
   const profileRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (userProfile) {
-      setCurrentUser(userProfile);
+    if (userProfile && userProfile.id !== currentUser.id) {
+      Promise.resolve().then(() => setCurrentUser(userProfile));
     }
-  }, [userProfile]);
+  }, [userProfile, currentUser.id]);
 
   useEffect(() => {
     const refreshData = () => {
       const savedMembers = localStorage.getItem('et_team_members');
-      const members: TeamMember[] = savedMembers ? JSON.parse(savedMembers) : DEFAULT_PERSONAS;
+      let members: TeamMember[] = DEFAULT_PERSONAS;
+      try {
+        if (savedMembers) {
+          const parsed = JSON.parse(savedMembers);
+          if (Array.isArray(parsed)) members = parsed;
+        }
+      } catch (e) {
+        console.error('Failed to parse members:', e);
+      }
       setTeamMembers(members);
 
       if (!userProfile) {
@@ -95,17 +150,30 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       }
 
       const savedConfig = localStorage.getItem('et_brand_config');
-      if (savedConfig) setAgencyConfig(JSON.parse(savedConfig));
+      if (savedConfig) {
+        try {
+          const parsed = JSON.parse(savedConfig);
+          setAgencyConfig(parsed);
+        } catch (e) {
+          console.error('Failed to parse brand config:', e);
+        }
+      }
 
-      // Calculate ongoing trips count
       const savedTrips = localStorage.getItem('et_trips');
-      const trips: Trip[] = savedTrips ? JSON.parse(savedTrips) : MOCK_TRIPS;
+      let trips: Trip[] = MOCK_TRIPS;
+      try {
+        if (savedTrips) {
+          const parsed = JSON.parse(savedTrips);
+          if (Array.isArray(parsed)) trips = parsed;
+        }
+      } catch (e) {
+        console.error('Failed to parse trips in layout:', e);
+      }
       const todayStr = new Date().toISOString().split('T')[0];
       const ongoing = trips.filter(t => t.status === TripStatus.BOOKED && t.startDate <= todayStr && t.endDate >= todayStr);
       setOngoingCount(ongoing.length);
     };
 
-    refreshData();
     window.addEventListener('storage', refreshData);
     window.addEventListener('user-profile-updated', refreshData);
     window.addEventListener('et_settings_updated', refreshData);
@@ -122,7 +190,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       window.removeEventListener('et_settings_updated', refreshData);
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, []);
+  }, [userProfile]);
 
   const switchPersona = (member: TeamMember) => {
     localStorage.setItem('et_active_member_id', member.id);
@@ -133,7 +201,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isAllowed = (path: string) => {
     if (currentUser.role === UserRole.ADMIN) return true;
     const salesPaths = ['/', '/pipeline', '/leads', '/trips', '/templates'];
-    const opsPaths = ['/trips', '/ongoing', '/hotels', '/vehicles', '/activities', '/add-ons', '/master-terms'];
+    const opsPaths = ['/trips', '/ongoing', '/hotels', '/vehicles', '/activities', '/add-ons', '/master-terms', '/database/variations', '/database/assets'];
     if (currentUser.role === UserRole.SALES) return salesPaths.includes(path) || path.startsWith('/leads') || path.startsWith('/trips');
     if (currentUser.role === UserRole.OPERATIONS) return opsPaths.includes(path) || path.startsWith('/trips') || path.startsWith('/ongoing');
     return false;
@@ -185,6 +253,8 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
               <SidebarItem icon={Car} label="Vehicle Fleet" path="/vehicles" active={location.pathname === '/vehicles'} roleColor={currentUser.color} />
               <SidebarItem icon={Compass} label="Activities" path="/activities" active={location.pathname === '/activities'} roleColor={currentUser.color} />
               <SidebarItem icon={Sparkles} label="Add-ons" path="/add-ons" active={location.pathname === '/add-ons'} roleColor={currentUser.color} />
+              <SidebarItem icon={ImageIcon} label="Destination Assets" path="/database/assets" active={location.pathname === '/database/assets'} roleColor={currentUser.color} />
+              <SidebarItem icon={Zap} label="Day Variations" path="/database/variations" active={location.pathname === '/database/variations'} roleColor={currentUser.color} />
               <SidebarItem icon={ListChecks} label="Master Terms" path="/master-terms" active={location.pathname === '/master-terms'} roleColor={currentUser.color} />
             </>
           )}

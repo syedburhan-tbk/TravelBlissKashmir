@@ -19,6 +19,8 @@ import Activities from './pages/Activities';
 import AddOns from './pages/AddOns';
 import Templates from './pages/Templates';
 import TemplateBuilder from './pages/TemplateBuilder';
+import VariationsDatabase from './pages/VariationsDatabase';
+import DestinationAssets from './pages/DestinationAssets';
 import Settings from './pages/Settings';
 import NewTrip from './pages/NewTrip';
 import ClientItinerary from './pages/ClientItinerary';
@@ -53,8 +55,11 @@ const App: React.FC = () => {
             <Route path="/activities" element={<Layout><Activities /></Layout>} />
             <Route path="/add-ons" element={<Layout><AddOns /></Layout>} />
             <Route path="/master-terms" element={<Layout><MasterTerms /></Layout>} />
+            <Route path="/database/variations" element={<Layout><VariationsDatabase /></Layout>} />
+            <Route path="/database/assets" element={<Layout><DestinationAssets /></Layout>} />
             
             <Route path="/templates" element={<Layout><Templates /></Layout>} />
+            <Route path="/templates/new" element={<Layout><TemplateBuilder /></Layout>} />
             <Route path="/templates/:id/edit" element={<Layout><TemplateBuilder /></Layout>} />
 
             <Route path="/daybook" element={<Layout><DayBook /></Layout>} />

@@ -1,28 +1,35 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Filter, Calendar, User, ArrowRight, X, Layers } from 'lucide-react';
+import { Plus, Search, Filter, Calendar, User, ArrowRight, X, Layers, Trash2, Edit2 } from 'lucide-react';
 import { MOCK_TRIPS } from '../constants';
 import { Trip, TripStatus, TripType } from '../types';
+import { tripService } from '../services/tripService';
+import { useStorageSync } from '../hooks/useStorageSync';
+
+import { safeLocalStorage, STORAGE_KEYS } from '../utils/storage';
 
 const TripList: React.FC = () => {
   const navigate = useNavigate();
-  const [trips, setTrips] = useState<Trip[]>([]);
+  const [trips, setTrips] = useState<Trip[]>(() => {
+    try {
+      const savedTrips = safeLocalStorage.getItem(STORAGE_KEYS.TRIPS);
+      return savedTrips ? JSON.parse(savedTrips) : MOCK_TRIPS;
+    } catch (e) {
+      console.error('Failed to parse trips:', e);
+      return MOCK_TRIPS;
+    }
+  });
+
+  // Sync trips across tabs
+  useStorageSync(STORAGE_KEYS.TRIPS, trips, setTrips, MOCK_TRIPS);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [tripTypeFilter, setTripTypeFilter] = useState('All');
   const [startDateFilter, setStartDateFilter] = useState('');
   const [salespersonFilter, setSalespersonFilter] = useState('All');
   const [showFilters, setShowFilters] = useState(false);
-
-  useEffect(() => {
-    const savedTrips = localStorage.getItem('et_trips');
-    if (savedTrips) {
-      setTrips(JSON.parse(savedTrips));
-    } else {
-      setTrips(MOCK_TRIPS);
-    }
-  }, []);
 
   const salespeople = Array.from(new Set(trips.map(t => t.assignedSalesperson)));
 
@@ -48,6 +55,31 @@ const TripList: React.FC = () => {
     setTripTypeFilter('All');
     setStartDateFilter('');
     setSalespersonFilter('All');
+  };
+
+  const deleteTrip = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    console.log('TripList: Attempting to delete trip with ID:', id);
+    if (window.confirm("Permanently delete this trip from your records? This action cannot be undone.")) {
+      console.log('TripList: User confirmed deletion for ID:', id);
+      
+      // 1. Delete from Cloud (RTDB)
+      await tripService.deleteTrip(id);
+      
+      // 2. Update Local State & Storage
+      setTrips(prev => {
+        const updated = prev.filter(t => t.id !== id);
+        console.log('TripList: New trip count:', updated.length);
+        const success = safeLocalStorage.setItem(STORAGE_KEYS.TRIPS, JSON.stringify(updated));
+        if (success) {
+          console.log('TripList: Successfully updated storage');
+        } else {
+          console.error('TripList: Failed to update storage');
+          alert('Warning: Could not save changes to local storage. Your storage might be full.');
+        }
+        return updated;
+      });
+    }
   };
 
   return (
@@ -145,20 +177,38 @@ const TripList: React.FC = () => {
           >
             <div className="p-5 flex-1">
               <div className="flex justify-between items-start mb-4">
-                <span className={`px-2.5 py-1 rounded text-[10px] font-black uppercase tracking-widest ${
-                  trip.tripType === TripType.HONEYMOON ? 'bg-pink-100 text-pink-700' :
-                  trip.tripType === TripType.FAMILY ? 'bg-emerald-100 text-emerald-700' :
-                  'bg-slate-100 text-slate-700'
-                }`}>
-                  {trip.tripType}
-                </span>
-                <span className={`px-2.5 py-1 rounded text-[10px] font-black uppercase tracking-widest ${
-                  trip.status === TripStatus.BOOKED ? 'bg-green-100 text-green-700' :
-                  trip.status === TripStatus.QUOTED ? 'bg-blue-100 text-blue-700' :
-                  'bg-orange-100 text-orange-700'
-                }`}>
-                  {trip.status}
-                </span>
+                <div className="flex flex-wrap gap-2">
+                  <span className={`px-2.5 py-1 rounded text-[10px] font-black uppercase tracking-widest ${
+                    trip.tripType === TripType.HONEYMOON ? 'bg-pink-100 text-pink-700' :
+                    trip.tripType === TripType.FAMILY ? 'bg-emerald-100 text-emerald-700' :
+                    'bg-slate-100 text-slate-700'
+                  }`}>
+                    {trip.tripType}
+                  </span>
+                  <span className={`px-2.5 py-1 rounded text-[10px] font-black uppercase tracking-widest ${
+                    trip.status === TripStatus.BOOKED ? 'bg-green-100 text-green-700' :
+                    trip.status === TripStatus.QUOTED ? 'bg-blue-100 text-blue-700' :
+                    'bg-orange-100 text-orange-700'
+                  }`}>
+                    {trip.status}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1 -mt-1 -mr-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); navigate(`/trips/${trip.id}`); }}
+                    className="p-2 hover:bg-blue-50 rounded-lg text-slate-400 hover:text-blue-600 transition-colors"
+                    title="Edit Itinerary"
+                  >
+                    <Edit2 size={16} />
+                  </button>
+                  <button 
+                    onClick={(e) => deleteTrip(trip.id, e)}
+                    className="p-2 hover:bg-rose-50 rounded-lg text-slate-400 hover:text-rose-500 transition-colors"
+                    title="Delete Trip"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
               </div>
               
               <div className="flex justify-between items-start">

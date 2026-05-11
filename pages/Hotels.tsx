@@ -35,6 +35,8 @@ import {
 import { HOTELS } from '../constants';
 import { HotelCategory, Hotel } from '../types';
 
+import { safeLocalStorage, STORAGE_KEYS } from '../utils/storage';
+
 const CategoryIcon = ({ category }: { category: HotelCategory }) => {
   switch (category) {
     case HotelCategory.LUXURY: return <Stars size={14} className="text-amber-500" />;
@@ -51,7 +53,15 @@ const Hotels: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [viewingHotel, setViewingHotel] = useState<Hotel | null>(null);
   const [editingHotelId, setEditingHotelId] = useState<string | null>(null);
-  const [customHotels, setCustomHotels] = useState<Hotel[]>([]);
+  const [customHotels, setCustomHotels] = useState<Hotel[]>(() => {
+    try {
+      const saved = safeLocalStorage.getItem(STORAGE_KEYS.HOTELS);
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      console.error('Failed to parse custom hotels:', e);
+      return [];
+    }
+  });
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -77,11 +87,6 @@ const Hotels: React.FC = () => {
   };
 
   const [formData, setFormData] = useState<Partial<Hotel>>(initialFormState);
-
-  useEffect(() => {
-    const saved = localStorage.getItem('et_hotels');
-    if (saved) setCustomHotels(JSON.parse(saved));
-  }, []);
 
   const allHotels = useMemo(() => {
     const customIds = new Set(customHotels.map(h => h.id));
@@ -192,7 +197,7 @@ const Hotels: React.FC = () => {
     } else updated = [...customHotels, hotelData];
 
     setCustomHotels(updated);
-    localStorage.setItem('et_hotels', JSON.stringify(updated));
+    safeLocalStorage.setItem(STORAGE_KEYS.HOTELS, JSON.stringify(updated));
     setIsModalOpen(false);
   };
 
@@ -485,11 +490,11 @@ const Hotels: React.FC = () => {
                   <div className="grid grid-cols-2 gap-6">
                       <div className="col-span-2 space-y-1.5">
                         <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Hotel Name</label>
-                        <input required type="text" className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none font-bold text-slate-900 focus:ring-2 focus:ring-blue-500 shadow-sm" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                        <input required type="text" className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none font-bold text-slate-900 focus:ring-2 focus:ring-blue-500 shadow-sm" value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} />
                       </div>
                       <div className="space-y-1.5">
                         <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Location / City</label>
-                        <input required type="text" className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none font-bold text-slate-900 focus:ring-2 focus:ring-blue-500 shadow-sm" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} />
+                        <input required type="text" className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none font-bold text-slate-900 focus:ring-2 focus:ring-blue-500 shadow-sm" value={formData.location || ''} onChange={e => setFormData({...formData, location: e.target.value})} />
                       </div>
                       <div className="space-y-1.5">
                         <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Category</label>
@@ -499,11 +504,11 @@ const Hotels: React.FC = () => {
                       </div>
                       <div className="space-y-1.5">
                         <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Operational Phone</label>
-                        <input required type="text" className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none font-bold text-slate-900 focus:ring-2 focus:ring-blue-500 shadow-sm" value={formData.contact} onChange={e => setFormData({...formData, contact: e.target.value})} />
+                        <input required type="text" className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none font-bold text-slate-900 focus:ring-2 focus:ring-blue-500 shadow-sm" value={formData.contact || ''} onChange={e => setFormData({...formData, contact: e.target.value})} />
                       </div>
                       <div className="space-y-1.5">
                         <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Official URL (Optional)</label>
-                        <input type="url" className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none font-medium text-slate-900 focus:ring-2 focus:ring-blue-500 shadow-sm" placeholder="https://..." value={formData.hotelLink} onChange={e => setFormData({...formData, hotelLink: e.target.value})} />
+                        <input type="url" className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none font-medium text-slate-900 focus:ring-2 focus:ring-blue-500 shadow-sm" placeholder="https://..." value={formData.hotelLink || ''} onChange={e => setFormData({...formData, hotelLink: e.target.value})} />
                       </div>
                   </div>
                 </div>
@@ -534,7 +539,7 @@ const Hotels: React.FC = () => {
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Rate Valid Until</label>
-                      <input type="date" className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none font-bold text-slate-900 shadow-sm" value={formData.rateValidityDate} onChange={e => setFormData({...formData, rateValidityDate: e.target.value})} />
+                      <input type="date" className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none font-bold text-slate-900 shadow-sm" value={formData.rateValidityDate || ''} onChange={e => setFormData({...formData, rateValidityDate: e.target.value})} />
                     </div>
                   </div>
                 </div>
@@ -545,7 +550,7 @@ const Hotels: React.FC = () => {
                   <div className="grid grid-cols-2 gap-6">
                       <div className="col-span-2 space-y-1.5">
                         <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Internal Notes (Hidden from clients)</label>
-                        <textarea rows={3} placeholder="Add tips for sales/ops team..." className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none font-medium text-slate-900 shadow-sm" value={formData.internalNotes} onChange={e => setFormData({...formData, internalNotes: e.target.value})} />
+                        <textarea rows={3} placeholder="Add tips for sales/ops team..." className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none font-medium text-slate-900 shadow-sm" value={formData.internalNotes || ''} onChange={e => setFormData({...formData, internalNotes: e.target.value})} />
                       </div>
                       <div className="col-span-2 space-y-3">
                          <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Contract / Seasonal PDF</label>
