@@ -105,6 +105,10 @@ service cloud.firestore {
         allow read, write: if isWorkspaceMember(workspaceId);
       }
       
+      match /destination_assets/{imageId} {
+        allow read, write: if isWorkspaceMember(workspaceId);
+      }
+      
       match /trips/{tripId} {
         allow get: if true; // Public retrieval for shared links; could restrict to member or public flag.
         // List: requires being a member

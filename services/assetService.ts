@@ -1,19 +1,28 @@
 import { DestinationImage, ItineraryDay } from '../types';
-import { safeLocalStorage, STORAGE_KEYS } from '../utils/storage';
+import { db } from '../lib/firebase';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 
-export function getRandomImagesForDestination(destination: string | undefined | null, count: number = 2): string[] {
-  if (!destination) return [];
-  
-  const saved = safeLocalStorage.getItem(STORAGE_KEYS.DEST_IMAGES);
-  if (!saved) return [];
+let _workspaceId: string | null = null;
+export function setAssetWorkspaceId(id: string | null) {
+  _workspaceId = id;
+}
+
+export async function getRandomImagesForDestination(destination: string | undefined | null, count: number = 2): Promise<string[]> {
+  if (!destination || !_workspaceId) return [];
   
   try {
-    const allImages = JSON.parse(saved);
-    if (!Array.isArray(allImages)) return [];
+    const destAssetsRef = collection(db, `workspaces/${_workspaceId}/destination_assets`);
+    // Due to simple search, we will fetch all and filter client side.
+    // In production with large sets, this would use a proper querying approach.
+    const snapshot = await getDocs(destAssetsRef);
+    const allImages: any[] = [];
+    snapshot.forEach(doc => allImages.push(doc.data()));
+    
+    if (allImages.length === 0) return [];
     
     const searchStr = (destination || '').toLowerCase();
     
-    const relevantImages = allImages.filter((img: any) => 
+    const relevantImages = allImages.filter(img => 
       img && 
       typeof img.destination === 'string' && 
       (img.destination.toLowerCase().includes(searchStr) ||
@@ -31,14 +40,14 @@ export function getRandomImagesForDestination(destination: string | undefined | 
   }
 }
 
-export function populateItineraryWithRandomImages(itinerary: ItineraryDay[]): ItineraryDay[] {
+export async function populateItineraryWithRandomImages(itinerary: ItineraryDay[]): Promise<ItineraryDay[]> {
   if (!itinerary) return [];
   
-  return itinerary.map(day => {
+  const promises = itinerary.map(async day => {
     try {
       // Determine primary destination for the day
       const destination = day.location || day.title;
-      const randomImages = getRandomImagesForDestination(destination);
+      const randomImages = await getRandomImagesForDestination(destination);
       
       return {
         ...day,
@@ -49,4 +58,6 @@ export function populateItineraryWithRandomImages(itinerary: ItineraryDay[]): It
       return day;
     }
   });
+  
+  return Promise.all(promises);
 }

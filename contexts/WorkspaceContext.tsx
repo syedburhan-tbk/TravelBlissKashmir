@@ -3,6 +3,7 @@ import { Workspace, WorkspaceMember, WorkspaceRole } from '../types';
 import { workspaceService } from '../services/workspaceService';
 import { useAuth } from './AuthContext';
 import { setWorkspaceIdForSync } from '../utils/storage';
+import { setAssetWorkspaceId } from '../services/assetService';
 
 interface WorkspaceContextType {
   workspaces: Workspace[];
@@ -26,8 +27,10 @@ export const WorkspaceProvider: React.FC<{ children: ReactNode }> = ({ children 
   useEffect(() => {
     if (currentWorkspace) {
       setWorkspaceIdForSync(currentWorkspace.id);
+      setAssetWorkspaceId(currentWorkspace.id);
     } else {
       setWorkspaceIdForSync(null);
+      setAssetWorkspaceId(null);
     }
   }, [currentWorkspace]);
 

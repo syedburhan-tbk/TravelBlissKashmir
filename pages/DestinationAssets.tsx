@@ -2,7 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Camera, Image as ImageIcon, Plus, Trash2, MapPin, Upload, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { DestinationImage } from '../types';
-import { safeLocalStorage, STORAGE_KEYS } from '../utils/storage';
+import { db } from '../lib/firebase';
+import { collection, doc, setDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
+import { useWorkspace } from '../contexts/WorkspaceContext';
 
 const DESTINATIONS = [
   'Srinagar',
@@ -20,22 +22,32 @@ const DESTINATIONS = [
 const generateImgId = () => Math.random().toString(36).substr(2, 9);
 
 export default function DestinationAssets() {
-  const [images, setImages] = useState<DestinationImage[]>(() => {
-    try {
-      const saved = safeLocalStorage.getItem(STORAGE_KEYS.DEST_IMAGES);
-      if (!saved) return [];
-      const parsed = JSON.parse(saved);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch (e) {
-      console.error('Initial parse failed:', e);
-      return [];
-    }
-  });
+  const { currentWorkspace } = useWorkspace();
+  const [images, setImages] = useState<DestinationImage[]>([]);
   const [selectedDest, setSelectedDest] = useState(DESTINATIONS[0]);
   const [activeTab, setActiveTab] = useState<'files' | 'links'>('files');
   const [isUploading, setIsUploading] = useState(false);
   const [newImageUrls, setNewImageUrls] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+
+  useEffect(() => {
+    if (!currentWorkspace) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setImages([]);
+      return;
+    }
+    const destAssetsRef = collection(db, `workspaces/${currentWorkspace.id}/destination_assets`);
+    const unsubscribe = onSnapshot(destAssetsRef, (snapshot) => {
+      const loadedImages: DestinationImage[] = [];
+      snapshot.forEach(doc => {
+        loadedImages.push(doc.data() as DestinationImage);
+      });
+      setImages(loadedImages);
+    }, (error) => {
+      console.error("Error loading destination assets:", error);
+    });
+    return () => unsubscribe();
+  }, [currentWorkspace]);
 
   const compressImage = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -132,7 +144,7 @@ export default function DestinationAssets() {
       });
       
       if (newItems.length > 0) {
-        saveImages([...images, ...newItems]);
+        saveImages(newItems);
       }
       
       if (newItems.length < fileList.length) {
@@ -149,22 +161,31 @@ export default function DestinationAssets() {
     }
   };
 
-  const saveImages = (updated: DestinationImage[]) => {
+  const saveImages = async (newImages: DestinationImage[]) => {
+    if (!currentWorkspace) return;
     try {
-      const serialized = JSON.stringify(updated);
-      const success = safeLocalStorage.setItem(STORAGE_KEYS.DEST_IMAGES, serialized);
-      if (success) {
-        setImages(updated);
-      }
+      const promises = newImages.map(img => 
+        setDoc(doc(db, `workspaces/${currentWorkspace.id}/destination_assets`, img.id), img)
+      );
+      await Promise.all(promises);
     } catch (error) {
-      console.error('Storage quota error:', error);
-      alert('Storage Quota Reached: Browser storage is full. Please delete some existing photos before adding more. High-resolution photos take up a lot of space!');
+      console.error('Firestore save error:', error);
+      alert('Error saving images to cloud. Check console for details.');
     }
   };
 
-  const clearDestinationAssets = () => {
-    if (window.confirm(`Are you sure you want to delete ALL assets for ${selectedDest}? This will free up storage space.`)) {
-      saveImages(images.filter(img => img.destination !== selectedDest));
+  const clearDestinationAssets = async () => {
+    if (!currentWorkspace) return;
+    if (window.confirm(`Are you sure you want to delete ALL assets for ${selectedDest}? This will delete them from the cloud.`)) {
+      const toDelete = images.filter(img => img.destination === selectedDest);
+      try {
+        const promises = toDelete.map(img => 
+          deleteDoc(doc(db, `workspaces/${currentWorkspace.id}/destination_assets`, img.id))
+        );
+        await Promise.all(promises);
+      } catch (error) {
+        console.error("Error deleting assets", error);
+      }
     }
   };
 
@@ -176,13 +197,18 @@ export default function DestinationAssets() {
       url: url.trim()
     }));
     
-    saveImages([...images, ...newItems]);
+    saveImages(newItems);
     setNewImageUrls('');
     setIsUploading(false);
   };
 
-  const removeImage = (id: string) => {
-    saveImages(images.filter(img => img.id !== id));
+  const removeImage = async (id: string) => {
+    if (!currentWorkspace) return;
+    try {
+      await deleteDoc(doc(db, `workspaces/${currentWorkspace.id}/destination_assets`, id));
+    } catch (error) {
+      console.error("Error deleting image", error);
+    }
   };
 
   const filteredImages = images.filter(img => img.destination === selectedDest);

@@ -153,7 +153,7 @@ const NewTrip: React.FC = () => {
   const handleNext = () => setStep(step + 1);
   const handleBack = () => setStep(step - 1);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // Fetch current Master Terms
@@ -198,7 +198,7 @@ const NewTrip: React.FC = () => {
         status: TripStatus.LEAD,
         marginPercentage: selectedTemplate?.baseMargin || BRAND_CONFIG.defaultMargin,
         addOnIds: [],
-        itinerary: selectedTemplate ? populateItineraryWithRandomImages(JSON.parse(JSON.stringify(selectedTemplate.itinerary))) : [],
+        itinerary: selectedTemplate ? await populateItineraryWithRandomImages(JSON.parse(JSON.stringify(selectedTemplate.itinerary))) : [],
         versions: [],
         startLocation: formData.startLocation,
         // If blank trip, use Master Database Terms. If template, use Template Terms.

@@ -256,7 +256,7 @@ const TripBuilder: React.FC = () => {
     budgetLevel: 'elite' as 'prime' | 'elite' | 'signature'
   });
 
-  const handleSmartBuild = () => {
+  const handleSmartBuild = async () => {
     if (!trip) return;
 
     const variations = ItineraryEngine.buildSmartItinerary({
@@ -273,9 +273,10 @@ const TripBuilder: React.FC = () => {
       ItineraryEngine.variationToDay(v, i + 1, smartInput.budgetLevel, trip.vehicleSelection || 'Sedan')
     );
 
+    const populatedItinerary = await populateItineraryWithRandomImages(newItinerary);
+
     setTrip(prev => {
       if (!prev) return prev;
-      const populatedItinerary = populateItineraryWithRandomImages(newItinerary);
       return {
         ...prev,
         numDays: smartInput.totalDays,
@@ -966,10 +967,10 @@ const TripBuilder: React.FC = () => {
     navigate(`/quotation/${trip.id}`);
   };
 
-  const handleRefreshVisuals = () => {
+  const handleRefreshVisuals = async () => {
     if (!trip) return;
     if (window.confirm('Update all day images randomly from the assets database?')) {
-      const updated = populateItineraryWithRandomImages(trip.itinerary);
+      const updated = await populateItineraryWithRandomImages(trip.itinerary);
       const updatedTrip = { ...trip, itinerary: updated };
       setTrip(updatedTrip);
       updateTripInStorage(updatedTrip);
