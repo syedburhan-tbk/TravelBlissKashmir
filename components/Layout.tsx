@@ -21,6 +21,8 @@ import {
   AlertTriangle,
   Clock,
   ChevronRight,
+  ChevronLeft,
+  Menu,
   MessageSquare,
   ChevronDown,
   User as UserIcon,
@@ -37,25 +39,30 @@ import { MOCK_LEADS, DEFAULT_PERSONAS, BRAND_CONFIG, MOCK_TRIPS } from '../const
 import { sendSimulatedMessage, DEFAULT_TEMPLATES, saveMessageLog } from '../services/messagingService';
 import { safeLocalStorage, STORAGE_KEYS } from '../utils/storage';
 
-const SidebarItem = ({ icon: Icon, label, path, active, roleColor, badge }: { icon: any, label: string, path: string, active: boolean, roleColor: string, badge?: number }) => (
+const SidebarItem = ({ icon: Icon, label, path, active, roleColor, badge, isCollapsed }: { icon: any, label: string, path: string, active: boolean, roleColor: string, badge?: number, isCollapsed?: boolean }) => (
   <Link 
     to={path} 
-    className={`flex items-center justify-between gap-3 px-4 py-3 rounded-2xl transition-all ${
-      active ? `${roleColor} text-white shadow-lg` : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+    className={`flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'} gap-3 px-4 py-2.5 rounded-[12px] transition-all duration-200 ${
+      active ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-400 hover:bg-slate-900/50 hover:text-white'
     }`}
+    title={isCollapsed ? label : ''}
   >
     <div className="flex items-center gap-3">
-      <Icon size={18} />
-      <span className="font-bold text-[13px]">{label}</span>
+      <Icon size={18} strokeWidth={active ? 2.5 : 2} />
+      {!isCollapsed && <span className={`text-[13px] tracking-tight ${active ? 'font-bold' : 'font-medium'}`}>{label}</span>}
     </div>
-    {badge !== undefined && badge > 0 && (
-      <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${active ? 'bg-white text-blue-600' : 'bg-blue-600 text-white'}`}>{badge}</span>
+    {!isCollapsed && badge !== undefined && badge > 0 && (
+      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${active ? 'bg-white/20 text-white' : 'bg-[#007AFF] text-white'}`}>{badge}</span>
     )}
   </Link>
 );
 
-const SidebarHeader = ({ label }: { label: string }) => (
-  <p className="text-slate-600 text-[10px] font-black uppercase tracking-[0.2em] mb-3 mt-6 ml-4">{label}</p>
+const SidebarHeader = ({ label, isCollapsed }: { label: string, isCollapsed?: boolean }) => (
+  isCollapsed ? (
+    <div className="h-px bg-slate-900/50 my-6 mx-2" />
+  ) : (
+    <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.15em] mb-2 mt-8 ml-4 opacity-70">{label}</p>
+  )
 );
 
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -64,6 +71,17 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { signOut, user: authUser, userProfile } = useAuth();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    return safeLocalStorage.getItem('et_sidebar_collapsed') === 'true';
+  });
+
+  const toggleSidebar = () => {
+    setIsSidebarCollapsed(prev => {
+      const newState = !prev;
+      safeLocalStorage.setItem('et_sidebar_collapsed', newState.toString());
+      return newState;
+    });
+  };
   const [currentUser, setCurrentUser] = useState<TeamMember>(() => {
     if (userProfile) return userProfile;
     const savedMembers = safeLocalStorage.getItem(STORAGE_KEYS.TEAM_MEMBERS);
@@ -214,64 +232,66 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const remainingName = agencyName.slice(1).join(' ') || (agencyConfig.name === 'Travel Bliss Kashmir' ? 'BLISS KASHMIR' : '');
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#f8fafc]">
-      <aside className="w-64 bg-slate-950 flex flex-col p-6 border-r border-slate-900 transition-all duration-300">
-        <div className="flex items-center gap-3 mb-4">
-          <div className={`${currentUser.color} p-2.5 rounded-xl shadow-xl transition-colors duration-500 overflow-hidden flex items-center justify-center min-w-[44px] min-h-[44px]`}>
+    <div className="flex h-screen overflow-hidden bg-slate-950">
+      <aside className={`${isSidebarCollapsed ? 'w-20' : 'w-72'} flex flex-col p-4 border-r border-slate-900 transition-all duration-500 ease-in-out relative group/sidebar`}>
+        <div className={`flex items-center ${isSidebarCollapsed ? 'justify-center' : 'gap-3'} mb-8 mt-2 transition-all`}>
+          <div className={`${currentUser.color} p-2 rounded-xl shadow-xl transition-all duration-500 overflow-hidden flex items-center justify-center w-11 h-11 shrink-0`}>
             {agencyConfig.logo ? (
-              <img src={agencyConfig.logo} alt="Agency" className="w-full h-full object-contain filter invert brightness-0" />
+              <img src={agencyConfig.logo} alt="Agency" className="w-full h-full object-contain filter invert brightness-0 p-0.5" />
             ) : (
               <Mountain className="text-white" size={24} />
             )}
           </div>
-          <div className="overflow-hidden">
-            <h1 className="text-white font-black text-lg tracking-tighter leading-none truncate">{firstWord}</h1>
-            <p className="text-blue-500 text-[9px] font-black uppercase tracking-[0.2em] truncate">{remainingName}</p>
-          </div>
+          {!isSidebarCollapsed && (
+            <div className="overflow-hidden animate-in fade-in slide-in-from-left-2 duration-500">
+              <h1 className="text-white font-black text-lg tracking-tighter leading-none truncate">{firstWord}</h1>
+              <p className="text-blue-500 text-[9px] font-black uppercase tracking-[0.2em] truncate">{remainingName}</p>
+            </div>
+          )}
         </div>
 
-        <nav className="flex-1 space-y-1 overflow-y-auto custom-scrollbar pr-2">
+        <nav className="flex-1 space-y-1 overflow-y-auto custom-scrollbar pr-1">
           {(currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.SALES) && (
             <>
-              <SidebarHeader label="Revenue & Sales" />
-              <SidebarItem icon={LayoutDashboard} label="Dashboard" path="/" active={location.pathname === '/'} roleColor={currentUser.color} />
-              <SidebarItem icon={Trello} label="Sales Pipeline" path="/pipeline" active={location.pathname === '/pipeline'} roleColor={currentUser.color} />
-              <SidebarItem icon={Users} label="Lead Manager" path="/leads" active={location.pathname.startsWith('/leads') && location.pathname !== '/leads/new'} roleColor={currentUser.color} />
+              <SidebarHeader label="Revenue & Sales" isCollapsed={isSidebarCollapsed} />
+              <SidebarItem icon={LayoutDashboard} label="Dashboard" path="/" active={location.pathname === '/'} roleColor={currentUser.color} isCollapsed={isSidebarCollapsed} />
+              <SidebarItem icon={Trello} label="Sales Pipeline" path="/pipeline" active={location.pathname === '/pipeline'} roleColor={currentUser.color} isCollapsed={isSidebarCollapsed} />
+              <SidebarItem icon={Users} label="Lead Manager" path="/leads" active={location.pathname.startsWith('/leads') && location.pathname !== '/leads/new'} roleColor={currentUser.color} isCollapsed={isSidebarCollapsed} />
             </>
           )}
           
-          <SidebarHeader label="Operations" />
-          <SidebarItem icon={ActivityIcon} label="Ongoing Trips" path="/ongoing" active={location.pathname === '/ongoing'} roleColor={currentUser.color} badge={ongoingCount} />
-          <SidebarItem icon={Map} label="All Itineraries" path="/trips" active={location.pathname === '/trips' || (location.pathname.startsWith('/trips/') && !location.pathname.includes('print'))} roleColor={currentUser.color} />
-          {isAllowed('/templates') && <SidebarItem icon={FileText} label="Templates" path="/templates" active={location.pathname.startsWith('/templates')} roleColor={currentUser.color} />}
+          <SidebarHeader label="Operations" isCollapsed={isSidebarCollapsed} />
+          <SidebarItem icon={ActivityIcon} label="Ongoing Trips" path="/ongoing" active={location.pathname === '/ongoing'} roleColor={currentUser.color} badge={ongoingCount} isCollapsed={isSidebarCollapsed} />
+          <SidebarItem icon={Map} label="All Itineraries" path="/trips" active={location.pathname === '/trips' || (location.pathname.startsWith('/trips/') && !location.pathname.includes('print'))} roleColor={currentUser.color} isCollapsed={isSidebarCollapsed} />
+          {isAllowed('/templates') && <SidebarItem icon={FileText} label="Templates" path="/templates" active={location.pathname.startsWith('/templates')} roleColor={currentUser.color} isCollapsed={isSidebarCollapsed} />}
           
-          <SidebarHeader label="Finance & Accounts" />
-          <SidebarItem icon={BookOpen} label="Day Book" path="/daybook" active={location.pathname === '/daybook'} roleColor={currentUser.color} />
+          <SidebarHeader label="Finance & Accounts" isCollapsed={isSidebarCollapsed} />
+          <SidebarItem icon={BookOpen} label="Day Book" path="/daybook" active={location.pathname === '/daybook'} roleColor={currentUser.color} isCollapsed={isSidebarCollapsed} />
 
           {isAllowed('/hotels') && (
             <>
-              <SidebarHeader label="Master Database" />
-              <SidebarItem icon={HotelIcon} label="Hotels" path="/hotels" active={location.pathname === '/hotels'} roleColor={currentUser.color} />
-              <SidebarItem icon={Car} label="Vehicle Fleet" path="/vehicles" active={location.pathname === '/vehicles'} roleColor={currentUser.color} />
-              <SidebarItem icon={Compass} label="Activities" path="/activities" active={location.pathname === '/activities'} roleColor={currentUser.color} />
-              <SidebarItem icon={Sparkles} label="Add-ons" path="/add-ons" active={location.pathname === '/add-ons'} roleColor={currentUser.color} />
-              <SidebarItem icon={ImageIcon} label="Destination Assets" path="/database/assets" active={location.pathname === '/database/assets'} roleColor={currentUser.color} />
-              <SidebarItem icon={Zap} label="Day Variations" path="/database/variations" active={location.pathname === '/database/variations'} roleColor={currentUser.color} />
-              <SidebarItem icon={ListChecks} label="Master Terms" path="/master-terms" active={location.pathname === '/master-terms'} roleColor={currentUser.color} />
+              <SidebarHeader label="Master Database" isCollapsed={isSidebarCollapsed} />
+              <SidebarItem icon={HotelIcon} label="Hotels" path="/hotels" active={location.pathname === '/hotels'} roleColor={currentUser.color} isCollapsed={isSidebarCollapsed} />
+              <SidebarItem icon={Car} label="Vehicle Fleet" path="/vehicles" active={location.pathname === '/vehicles'} roleColor={currentUser.color} isCollapsed={isSidebarCollapsed} />
+              <SidebarItem icon={Compass} label="Activities" path="/activities" active={location.pathname === '/activities'} roleColor={currentUser.color} isCollapsed={isSidebarCollapsed} />
+              <SidebarItem icon={Sparkles} label="Add-ons" path="/add-ons" active={location.pathname === '/add-ons'} roleColor={currentUser.color} isCollapsed={isSidebarCollapsed} />
+              <SidebarItem icon={ImageIcon} label="Destination Assets" path="/database/assets" active={location.pathname === '/database/assets'} roleColor={currentUser.color} isCollapsed={isSidebarCollapsed} />
+              <SidebarItem icon={Zap} label="Day Variations" path="/database/variations" active={location.pathname === '/database/variations'} roleColor={currentUser.color} isCollapsed={isSidebarCollapsed} />
+              <SidebarItem icon={ListChecks} label="Master Terms" path="/master-terms" active={location.pathname === '/master-terms'} roleColor={currentUser.color} isCollapsed={isSidebarCollapsed} />
             </>
           )}
 
           {currentUser.role === UserRole.ADMIN && (
             <>
-              <SidebarHeader label="Administrator" />
-              <SidebarItem icon={ShieldCheck} label="User Roles & Access" path="/admin/users" active={location.pathname === '/admin/users'} roleColor={currentUser.color} />
+              <SidebarHeader label="Administrator" isCollapsed={isSidebarCollapsed} />
+              <SidebarItem icon={ShieldCheck} label="User Roles & Access" path="/admin/users" active={location.pathname === '/admin/users'} roleColor={currentUser.color} isCollapsed={isSidebarCollapsed} />
             </>
           )}
           
           {currentUser.role === UserRole.ADMIN && (
             <>
-              <SidebarHeader label="System" />
-              <SidebarItem icon={Settings} label="Settings" path="/settings" active={location.pathname === '/settings'} roleColor={currentUser.color} />
+              <SidebarHeader label="System" isCollapsed={isSidebarCollapsed} />
+              <SidebarItem icon={Settings} label="Settings" path="/settings" active={location.pathname === '/settings'} roleColor={currentUser.color} isCollapsed={isSidebarCollapsed} />
             </>
           )}
         </nav>
@@ -279,17 +299,26 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         <div className="mt-auto border-t border-slate-900 pt-6">
           <button 
             onClick={signOut}
-            className="flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-red-400 transition-colors w-full group">
-            <LogOut size={20} className="group-hover:translate-x-1 transition-transform" />
-            <span className="font-bold text-sm">Sign Out</span>
+            className={`flex items-center ${isSidebarCollapsed ? 'justify-center' : 'gap-3'} px-4 py-3 text-slate-500 hover:text-red-400 transition-colors w-full group`}
+            title={isSidebarCollapsed ? 'Sign Out' : ''}
+          >
+            <LogOut size={20} className={`${!isSidebarCollapsed ? 'group-hover:translate-x-1' : ''} transition-transform`} />
+            {!isSidebarCollapsed && <span className="font-bold text-sm">Sign Out</span>}
           </button>
         </div>
       </aside>
 
-      <main className="flex-1 flex flex-col overflow-hidden relative">
-        <header className="h-20 bg-white border-b border-slate-100 flex items-center justify-between px-10">
-          <div className="flex items-center gap-4">
-            <h2 className="text-slate-900 font-black text-xl tracking-tight uppercase">
+      <main className="flex-1 flex flex-col overflow-hidden relative bg-[#F5F5F7]">
+        <header className="h-20 bg-white/70 backdrop-blur-xl border-b border-slate-200/60 flex items-center justify-between px-6 lg:px-10 sticky top-0 z-[100]">
+          <div className="flex items-center gap-6">
+            <button 
+              onClick={toggleSidebar}
+              className="p-2.5 bg-slate-100/50 hover:bg-slate-100 rounded-[14px] text-slate-500 hover:text-[#007AFF] transition-all"
+              title={isSidebarCollapsed ? "Expand Menu" : "Collapse Menu"}
+            >
+              {isSidebarCollapsed ? <Menu size={20} /> : <ChevronLeft size={20} />}
+            </button>
+            <h2 className="text-slate-900 font-bold text-xl tracking-tighter whitespace-nowrap overflow-hidden">
               {location.pathname === '/' ? 'Business Intelligence' : 
                location.pathname.startsWith('/daybook') ? 'Internal Ledger' :
                location.pathname.startsWith('/ongoing') ? 'Valley Live Ops' :
@@ -353,7 +382,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-10 bg-[#f8fafc]">
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 lg:p-10">
           {children}
         </div>
       </main>

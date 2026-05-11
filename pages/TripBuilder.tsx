@@ -989,14 +989,19 @@ const TripBuilder: React.FC = () => {
 
   return (
     <div className="flex flex-col h-[calc(100vh-80px)] space-y-6 pb-6">
-      <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div className="flex items-center gap-5">
-          <button onClick={() => navigate('/trips')} className="p-3 hover:bg-slate-50 rounded-2xl transition-all border border-slate-100 shadow-sm">
-            <ArrowLeft size={20} className="text-slate-600" />
+      <div className="bg-white border-b border-slate-200 sticky top-0 z-[100] -mx-4 md:-mx-8 lg:-mx-10 mb-8 px-4 md:px-8 lg:px-10 py-5 flex flex-col xl:flex-row gap-6 items-center justify-between shadow-sm">
+        <div className="flex items-center gap-6 w-full xl:w-auto">
+          <button onClick={() => navigate('/trips')} className="p-3 bg-slate-50 text-slate-400 hover:text-blue-600 rounded-2xl transition-all">
+            <ArrowLeft size={20} />
           </button>
-          <div>
-            <h1 className="text-2xl font-black text-slate-900 tracking-tight">{trip.tripName}</h1>
-            <div className="flex items-center gap-3 mt-1 text-slate-400">
+          <div className="flex flex-col">
+            <h1 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+              {trip.tripName}
+              <span className={`text-[10px] px-2 py-0.5 rounded-full ${trip.status === TripStatus.BOOKED ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'}`}>
+                {trip.status}
+              </span>
+            </h1>
+            <div className="flex items-center gap-3 mt-1">
                <span className="text-[10px] font-black uppercase tracking-widest text-blue-600">{trip.client.name}</span>
                <span className="w-1 h-1 bg-slate-200 rounded-full"/>
                <div className="flex items-center gap-1.5 bg-slate-50 px-2 py-0.5 rounded-full border border-slate-100">
@@ -1007,120 +1012,110 @@ const TripBuilder: React.FC = () => {
                     onChange={(e) => setTrip({ ...trip, startLocation: e.target.value as 'Srinagar' | 'Jammu' })}
                   >
                     <option value="Srinagar">Srinagar Start</option>
-                    <option value="Jammu">Jammu Start (+₹1k/Day)</option>
-                  </select>
-               </div>
-               <span className="w-1 h-1 bg-slate-200 rounded-full"/>
-               <div className="flex items-center gap-1.5 bg-slate-50 px-2 py-0.5 rounded-full border border-slate-100">
-                  <MapIcon size={12} className="text-slate-400" />
-                  <select 
-                    className="bg-transparent text-[10px] font-black uppercase text-slate-600 outline-none cursor-pointer"
-                    value={trip.dropLocation || trip.startLocation}
-                    onChange={(e) => setTrip({ ...trip, dropLocation: e.target.value as 'Srinagar' | 'Jammu' })}
-                  >
-                    <option value="Srinagar">Srinagar Drop</option>
-                    <option value="Jammu">Jammu Drop</option>
+                    <option value="Jammu">Jammu Start (+₹1k/day)</option>
                   </select>
                </div>
             </div>
           </div>
         </div>
 
-        <div className="flex-1 flex items-center justify-center gap-6">
-           <div className="flex items-center gap-3 px-4 py-2 bg-slate-50 border border-slate-100 rounded-2xl">
-              <div className="flex items-center gap-2 pr-3 border-r border-slate-200">
-                 <Bed size={16} className="text-blue-600" />
-                 <div className="flex flex-col">
-                    <span className="text-[8px] font-black text-slate-400 uppercase leading-none mb-1">Rooms</span>
-                    <input 
-                      type="number" 
-                      min="1"
-                      className="bg-transparent text-sm font-black text-slate-900 w-8 outline-none"
-                      value={trip.numRooms || 1}
-                      onChange={(e) => setTrip({...trip, numRooms: parseInt(e.target.value) || 1})}
-                    />
-                 </div>
-              </div>
-              <div className="flex items-center gap-2 pr-3 border-r border-slate-200">
-                 <Plus size={16} className="text-emerald-600" />
-                 <div className="flex flex-col">
-                    <span className="text-[8px] font-black text-slate-400 uppercase leading-none mb-1">Extra Bed</span>
-                    <input 
-                      type="number" 
-                      min="0"
-                      className="bg-transparent text-sm font-black text-slate-900 w-8 outline-none"
-                      value={trip.extraBeds || 0}
-                      onChange={(e) => setTrip({...trip, extraBeds: parseInt(e.target.value) || 0})}
-                    />
-                 </div>
-              </div>
-              <div className="flex items-center gap-2">
-                 <Baby size={16} className="text-amber-500" />
-                 <div className="flex flex-col">
-                    <span className="text-[8px] font-black text-slate-400 uppercase leading-none mb-1">Child NB</span>
-                    <input 
-                      type="number" 
-                      min="0"
-                      className="bg-transparent text-sm font-black text-slate-900 w-8 outline-none"
-                      value={trip.childNoBed || 0}
-                      onChange={(e) => setTrip({...trip, childNoBed: parseInt(e.target.value) || 0})}
-                    />
-                 </div>
-              </div>
-           </div>
-        </div>
-
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-6 px-6 py-3 bg-blue-600 rounded-2xl shadow-xl shadow-blue-900/20">
-             <div className="text-right">
-               <p className="text-[9px] font-black text-blue-100 uppercase tracking-widest">Selected Elite Quote</p>
-               <p className="text-xl font-black text-white">₹{(trip.tierPrices?.elite || tieredCosts.elite.suggested).toLocaleString()}</p>
+        <div className="flex items-center justify-center gap-4 bg-slate-50 border border-slate-100 p-1.5 rounded-[20px]">
+          <div className="flex items-center gap-3 px-4 py-2 bg-white border border-slate-200 shadow-sm rounded-2xl">
+             <div className="flex items-center gap-2 pr-3 border-r border-slate-100">
+                <Bed size={16} className="text-blue-600" />
+                <div className="flex flex-col">
+                   <span className="text-[8px] font-black text-slate-400 uppercase leading-none mb-1">Rooms</span>
+                   <input 
+                     type="number" 
+                     min="1"
+                     className="bg-transparent text-sm font-black text-slate-900 w-8 outline-none"
+                     value={trip.numRooms || 1}
+                     onChange={(e) => setTrip({...trip, numRooms: parseInt(e.target.value) || 1})}
+                   />
+                </div>
+             </div>
+             <div className="flex items-center gap-2 pr-3 border-r border-slate-100">
+                <Plus size={16} className="text-emerald-600" />
+                <div className="flex flex-col">
+                   <span className="text-[8px] font-black text-slate-400 uppercase leading-none mb-1">Ex-Bed</span>
+                   <input 
+                     type="number" 
+                     min="0"
+                     className="bg-transparent text-sm font-black text-slate-900 w-8 outline-none"
+                     value={trip.extraBeds || 0}
+                     onChange={(e) => setTrip({...trip, extraBeds: parseInt(e.target.value) || 0})}
+                   />
+                </div>
+             </div>
+             <div className="flex items-center gap-2">
+                <Baby size={16} className="text-amber-500" />
+                <div className="flex flex-col">
+                   <span className="text-[8px] font-black text-slate-400 uppercase leading-none mb-1">CNB</span>
+                   <input 
+                     type="number" 
+                     min="0"
+                     className="bg-transparent text-sm font-black text-slate-900 w-8 outline-none"
+                     value={trip.childNoBed || 0}
+                     onChange={(e) => setTrip({...trip, childNoBed: parseInt(e.target.value) || 0})}
+                   />
+                </div>
              </div>
           </div>
-          <button 
-            onClick={handleRefreshVisuals}
-            className="p-4 bg-indigo-50 text-indigo-600 rounded-2xl hover:bg-indigo-100 transition-all shadow-sm border border-indigo-100"
-            title="Refresh Destination Assets"
-          >
-            <ImageIcon size={20} />
-          </button>
-          <button 
-            onClick={() => setIsVersionModalOpen(true)}
-            className="p-4 bg-slate-100 text-slate-600 rounded-2xl hover:bg-blue-50 hover:text-blue-600 transition-all shadow-sm"
-            title="Save as Version"
-          >
-            <FileClock size={20} />
-          </button>
-          <button 
-            onClick={handleSaveAsTemplate}
-            disabled={isSaving}
-            className="bg-white border-2 border-slate-200 text-slate-700 px-6 py-4 rounded-2xl font-black uppercase tracking-widest text-xs flex items-center gap-3 shadow-sm hover:border-slate-300 transition-all active:scale-95 disabled:opacity-50"
-          >
-            <Archive size={18} />
-            SAVE TEMPLATE
-          </button>
-          <button 
-            onClick={handleCopyProposalLink}
-            disabled={isSaving}
-            className="p-4 bg-slate-100 text-slate-600 rounded-2xl hover:bg-emerald-50 hover:text-emerald-600 transition-all shadow-sm flex items-center gap-2"
-            title="Copy Shareable Link"
-          >
-            {copiedLink ? <Check size={20} className="text-emerald-600" /> : <Copy size={20} />}
-            {copiedLink && <span className="text-[10px] font-black uppercase">Copied</span>}
-          </button>
-          <button 
-            onClick={handleNavigateToProposal}
-            disabled={isSaving}
-            className="bg-slate-900 text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-xs flex items-center gap-3 shadow-xl hover:bg-black transition-all active:scale-95 disabled:opacity-50"
-          >
-            {isSaving ? <RefreshCcw size={18} className="animate-spin" /> : <Download size={18} />}
-            {isSaving ? 'SYNCING...' : 'PROPOSAL / PDF'}
-          </button>
+        </div>
+
+        <div className="flex items-center gap-3 w-full xl:w-auto justify-end">
+          <div className="hidden sm:flex items-center gap-4 px-5 py-2.5 bg-blue-600 rounded-2xl shadow-lg shadow-blue-900/20">
+             <div className="text-right">
+               <p className="text-[8px] font-black text-blue-100 uppercase tracking-widest whitespace-nowrap">Selected Quote</p>
+               <p className="text-lg font-black text-white leading-none">₹{(trip.tierPrices?.elite || tieredCosts.elite.suggested).toLocaleString()}</p>
+             </div>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={handleRefreshVisuals}
+              className="p-3 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 transition-all border border-indigo-100"
+              title="Refresh Assets"
+            >
+              <ImageIcon size={18} />
+            </button>
+            <button 
+              onClick={() => setIsVersionModalOpen(true)}
+              className="p-3 bg-slate-100 text-slate-600 rounded-xl hover:bg-blue-50 hover:text-blue-600 transition-all shadow-sm"
+              title="Save Version"
+            >
+              <FileClock size={18} />
+            </button>
+            <button 
+              onClick={handleSaveAsTemplate}
+              disabled={isSaving}
+              className="hidden md:flex bg-white border-2 border-slate-200 text-slate-700 h-[44px] px-4 rounded-xl font-black uppercase tracking-widest text-[10px] items-center gap-2 shadow-sm hover:border-slate-300 transition-all"
+            >
+              <Archive size={14} />
+              <span className="hidden lg:block">Template</span>
+            </button>
+            <button 
+              onClick={handleCopyProposalLink}
+              disabled={isSaving}
+              className="p-3 bg-slate-100 text-slate-600 rounded-xl hover:bg-emerald-50 hover:text-emerald-600 transition-all shadow-sm flex items-center gap-2"
+              title="Copy Proposal"
+            >
+              {copiedLink ? <Check size={18} className="text-emerald-600" /> : <Copy size={18} />}
+            </button>
+            <button 
+              onClick={handleNavigateToProposal}
+              disabled={isSaving}
+              className="bg-slate-900 text-white h-[44px] px-6 md:px-8 rounded-xl font-black uppercase tracking-widest text-[10px] flex items-center gap-2 shadow-lg hover:shadow-xl transition-all"
+            >
+              {isSaving ? <RefreshCcw size={16} className="animate-spin" /> : <Download size={16} />}
+              <span>{isSaving ? 'SYNCING' : 'PROPOSAL'}</span>
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-12 gap-8 flex-1 overflow-hidden">
-        <div className="col-span-12 lg:col-span-3 space-y-6 overflow-y-auto pr-2">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-12 gap-8 flex-1 overflow-hidden">
+        <div className="col-span-1 md:col-span-1 xl:col-span-3 space-y-6 overflow-y-auto pr-2 custom-scrollbar">
             {/* AI Enhancement Section */}
             <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-[32px] p-6 shadow-xl shadow-blue-900/10 text-white overflow-hidden relative group">
                <div className="relative z-10 space-y-4">
@@ -1263,7 +1258,7 @@ const TripBuilder: React.FC = () => {
            </div>
         </div>
 
-        <div className="col-span-12 lg:col-span-6 space-y-8 overflow-y-auto pr-2 pb-6">
+        <div className="col-span-1 md:col-span-1 xl:col-span-6 space-y-8 overflow-y-auto pr-2 pb-6 custom-scrollbar px-1">
            {trip.itinerary[activeDayIndex] && (
              <div className="bg-white border border-slate-200 rounded-[40px] p-10 shadow-sm space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-300">
                 <div className="space-y-3">
@@ -1513,7 +1508,7 @@ const TripBuilder: React.FC = () => {
            )}
         </div>
 
-        <div className="col-span-12 lg:col-span-3 space-y-6 overflow-y-auto pr-2 pb-6">
+        <div className="col-span-1 md:col-span-2 xl:col-span-3 space-y-6 overflow-y-auto pr-2 pb-6 custom-scrollbar">
            <div className="flex gap-2 p-1 bg-slate-100 rounded-2xl">
               <button 
                 onClick={() => setActiveRightTab('config')}
