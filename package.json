@@ -19,6 +19,7 @@
     "eslint-plugin-react-refresh": "^0.5.2",
     "firebase": "^12.12.1",
     "framer-motion": "^12.38.0",
+    "idb-keyval": "^6.2.2",
     "lucide-react": "^0.562.0",
     "motion": "^12.38.0",
     "react": "^19.2.3",

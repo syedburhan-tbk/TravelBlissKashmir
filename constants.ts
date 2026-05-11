@@ -5,9 +5,9 @@ import { Hotel, Vehicle, Activity, AddOn, Trip, TripStatus, TripType, HotelCateg
 export type { TripTemplate };
 
 export const DEFAULT_PERSONAS: TeamMember[] = [
-  { id: 'tm-1', name: 'Adil Bakshi', role: UserRole.ADMIN, avatar: 'https://picsum.photos/seed/adil/100/100', title: 'Super Admin', color: 'bg-blue-600', email: 'adil@travelblisskashmir.in', phone: '+91 99061 23456', location: 'Srinagar Office' },
-  { id: 'tm-2', name: 'Sajad Ahmad', role: UserRole.SALES, avatar: 'https://picsum.photos/seed/sajad/100/100', title: 'Senior Sales Executive', color: 'bg-emerald-600', email: 'sajad@travelblisskashmir.in', phone: '+91 99061 23457', location: 'Srinagar Office' },
-  { id: 'tm-3', name: 'Ishfaq Lone', role: UserRole.OPERATIONS, avatar: 'https://picsum.photos/seed/ishfaq/100/100', title: 'Operations Manager', color: 'bg-amber-600', email: 'ishfaq@travelblisskashmir.in', phone: '+91 99061 23458', location: 'Srinagar Office' }
+  { id: 'tm-1', name: 'Executive Partner', role: UserRole.ADMIN, avatar: 'https://picsum.photos/seed/adil/100/100', title: 'Super Admin', color: 'bg-blue-600', email: 'admin@travelblisskashmir.in', phone: '+91 99061 23456', location: 'Srinagar Office' },
+  { id: 'tm-2', name: 'Sales Executive', role: UserRole.SALES, avatar: 'https://picsum.photos/seed/sajad/100/100', title: 'Senior Sales Executive', color: 'bg-emerald-600', email: 'sales@travelblisskashmir.in', phone: '+91 99061 23457', location: 'Srinagar Office' },
+  { id: 'tm-3', name: 'Operations Manager', role: UserRole.OPERATIONS, avatar: 'https://picsum.photos/seed/ishfaq/100/100', title: 'Operations Manager', color: 'bg-amber-600', email: 'operations@travelblisskashmir.in', phone: '+91 99061 23458', location: 'Srinagar Office' }
 ];
 
 const today = new Date();
@@ -103,95 +103,10 @@ export const ADD_ONS: AddOn[] = [
   { id: 'ao2', name: 'Candlelight Dinner', cost: 3500, isPerPax: false },
 ];
 
-export const MOCK_LEADS: Lead[] = [
-  {
-    id: 'l1',
-    name: 'Anjali Gupta',
-    phone: '9876543210',
-    email: 'anjali@example.com',
-    source: 'Instagram',
-    interest: TripType.HONEYMOON,
-    budgetRange: '1.5L - 2L',
-    travelMonth: 'December',
-    pax: 2,
-    assignedTo: 'Sajad Ahmad',
-    stage: LeadStage.CONTACTED,
-    score: LeadScore.HOT,
-    notes: 'Very interested in Taj Vivanta.',
-    communicationLogs: [
-      { id: 'c1', type: 'WhatsApp', timestamp: '2024-11-20T10:00:00Z', content: 'Sent winter catalog.', author: 'Sajad' }
-    ],
-    followUps: [
-      { id: 'f1', date: '2024-11-25', status: 'Pending', note: 'Call to discuss itinerary' }
-    ],
-    tripIds: ['t1', 't-ongoing-1'],
-    createdAt: '2024-11-19T08:00:00Z',
-    whatsappOptIn: true
-  }
-];
+export const MOCK_LEADS: Lead[] = [];
 
-export const MOCK_TRIPS: Trip[] = [
-  {
-    id: 't1',
-    leadId: 'l1',
-    client: {
-      name: 'Anjali Gupta',
-      phone: '9876543210',
-      email: 'anjali@example.com',
-      source: 'Instagram'
-    },
-    assignedSalesperson: 'Sajad Ahmad',
-    budgetRange: '1.5L - 2L',
-    tripName: 'Anjali & Rohit - Winter Honeymoon',
-    tripType: TripType.HONEYMOON,
-    startDate: '2024-12-15',
-    endDate: '2024-12-21',
-    pax: 2,
-    numRooms: 1,
-    extraBeds: 0,
-    childNoBed: 0,
-    status: TripStatus.BOOKED,
-    marginPercentage: 15,
-    addOnIds: ['ao1'],
-    startLocation: 'Srinagar',
-    inclusions: ['Welcome Drink', 'Honeymoon Cake'],
-    exclusions: ['Airfare'],
-    itinerary: [
-      { id: 'd1', dayNumber: 1, title: 'Arrival', location: 'Srinagar', hotelId: 'h1', vehicleId: 'v2', activityIds: ['a1'], clientNotes: 'Welcome!', internalNotes: '' }
-    ],
-    versions: []
-  },
-  {
-    id: 't-ongoing-1',
-    leadId: 'l1',
-    client: {
-      name: 'Anjali Gupta',
-      phone: '9876543210',
-      email: 'anjali@example.com',
-      source: 'Instagram'
-    },
-    assignedSalesperson: 'Ishfaq Lone',
-    budgetRange: '2.5L',
-    tripName: 'Gupta Family - Valley Tour',
-    tripType: TripType.FAMILY,
-    startDate: formatDate(new Date(today.getTime() - 2 * 24 * 60 * 60 * 1000)), // Started 2 days ago
-    endDate: formatDate(new Date(today.getTime() + 3 * 24 * 60 * 60 * 1000)),   // Ends in 3 days
-    pax: 4,
-    status: TripStatus.BOOKED,
-    marginPercentage: 15,
-    addOnIds: [],
-    startLocation: 'Srinagar',
-    inclusions: [],
-    exclusions: [],
-    itinerary: [
-      { id: 'od1', dayNumber: 1, title: 'Arrival in Srinagar', location: 'Srinagar', hotelId: 'h4', vehicleId: 'v2', activityIds: ['a1'], clientNotes: '', internalNotes: '' },
-      { id: 'od2', dayNumber: 2, title: 'Gulmarg Day Trip', location: 'Srinagar', hotelId: 'h4', vehicleId: 'v2', activityIds: ['a2'], clientNotes: '', internalNotes: '' },
-      { id: 'od3', dayNumber: 3, title: 'Pahalgam Transfer', location: 'Pahalgam', hotelId: 'h5', vehicleId: 'v2', activityIds: ['a3'], clientNotes: '', internalNotes: '' },
-      { id: 'od4', dayNumber: 4, title: 'Local Sightseeing', location: 'Pahalgam', hotelId: 'h5', vehicleId: 'v2', activityIds: [], clientNotes: '', internalNotes: '' },
-      { id: 'od5', dayNumber: 5, title: 'Departure', location: 'Srinagar', hotelId: '', vehicleId: 'v2', activityIds: [], clientNotes: '', internalNotes: '' }
-    ],
-  }
-];
+export const MOCK_TRIPS: Trip[] = [];
+
 
 export const DEFAULT_INCLUSIONS = [
   'Accommodation on twin sharing basis',

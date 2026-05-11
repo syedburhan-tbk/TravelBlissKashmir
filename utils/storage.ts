@@ -1,7 +1,7 @@
 
-/**
- * Safe localStorage wrapper that handles QuotaExceededError
- */
+import * as idb from 'idb-keyval';
+import { db } from '../lib/firebase';
+import { doc, setDoc, onSnapshot, collection, deleteDoc } from 'firebase/firestore';
 
 export const STORAGE_KEYS = {
   LEADS: 'et_leads',
@@ -18,159 +18,130 @@ export const STORAGE_KEYS = {
   MASTER_INCLUSIONS: 'et_master_inclusions',
   MASTER_EXCLUSIONS: 'et_master_exclusions',
   DASHBOARD_STATS: 'et_dashboard_stats',
-  VARIATIONS: 'et_variations'
+  VARIATIONS: 'et_variations',
+  BRAND_CONFIG: 'et_brand_config',
+  API_KEYS: 'et_api_keys',
+  MESSAGE_TEMPLATES: 'et_message_templates',
+  DAYBOOK: 'et_daybook'
+};
+
+const memoryCache: Record<string, string> = {};
+let isInitialized = false;
+let currentWorkspaceId: string | null = null;
+let unsubscribeSnapshot: (() => void) | null = null;
+
+export const setWorkspaceIdForSync = (workspaceId: string | null) => {
+  if (currentWorkspaceId === workspaceId) return;
+  currentWorkspaceId = workspaceId;
+  
+  if (unsubscribeSnapshot) {
+    unsubscribeSnapshot();
+    unsubscribeSnapshot = null;
+  }
+  
+  if (workspaceId) {
+    const storageRef = collection(db, `workspaces/${workspaceId}/storage`);
+    unsubscribeSnapshot = onSnapshot(storageRef, (snapshot) => {
+      snapshot.docChanges().forEach(change => {
+        const key = change.doc.id;
+        if (change.type === 'added' || change.type === 'modified') {
+          const val = change.doc.data().value;
+          if (typeof val === 'string' && memoryCache[key] !== val) {
+            memoryCache[key] = val;
+            idb.set(key, val).catch(e => console.error(e));
+            window.dispatchEvent(new StorageEvent('storage', {
+              key: key,
+              newValue: val
+            }));
+          }
+        } else if (change.type === 'removed') {
+          if (memoryCache[key] !== undefined) {
+            delete memoryCache[key];
+            idb.del(key).catch(e => console.error(e));
+            window.dispatchEvent(new StorageEvent('storage', {
+              key: key,
+              newValue: null
+            }));
+          }
+        }
+      });
+    }, (error) => {
+      console.error("Storage sync snapshot error:", error);
+    });
+  }
+};
+
+export const initStorage = async () => {
+  if (isInitialized) return;
+  try {
+    const keys = await idb.keys();
+    // Also grab any legacy localStorage data and migrate it to IDB
+    for (const key of Object.values(STORAGE_KEYS)) {
+      const legacyValue = localStorage.getItem(key);
+      if (legacyValue) {
+        await idb.set(key, legacyValue);
+        localStorage.removeItem(key);
+      }
+    }
+
+    const allKeys = await idb.keys();
+    for (const key of allKeys) {
+      if (typeof key === 'string') {
+        const val = await idb.get(key);
+        if (typeof val === 'string') {
+          memoryCache[key] = val;
+        }
+      }
+    }
+    isInitialized = true;
+  } catch (error) {
+    console.error('Failed to initialize storage:', error);
+    isInitialized = true; // Proceed anyway to unblock the app
+  }
 };
 
 export const safeLocalStorage = {
   getItem: (key: string): string | null => {
-    try {
-      return localStorage.getItem(key);
-    } catch (e) {
-      console.error(`Error reading ${key} from localStorage:`, e);
-      return null;
-    }
+    return memoryCache[key] || null;
   },
 
   setItem: (key: string, value: string): boolean => {
     try {
-      localStorage.setItem(key, value);
+      memoryCache[key] = value;
+      // Fire-and-forget sync to IDB
+      idb.set(key, value).then(() => {
+        window.dispatchEvent(new StorageEvent('storage', {
+          key: key,
+          newValue: value
+        }));
+      }).catch(e => {
+        console.error(`Failed to save ${key} to IDB.`, e);
+      });
+      
+      // Sync to Firebase if workspace is active
+      if (currentWorkspaceId && key !== STORAGE_KEYS.DEST_IMAGES) {
+        setDoc(doc(db, `workspaces/${currentWorkspaceId}/storage`, key), { value: value })
+          .catch(e => console.error(`Failed to sync ${key} to Firebase:`, e));
+      }
       return true;
     } catch (e) {
-      if (e instanceof DOMException && (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED')) {
-        console.warn(`Storage quota exceeded for ${key}. Attempting to prune...`);
-        return pruneAndRetry(key, value);
-      }
       console.error(`Direct error saving ${key}:`, e);
       return false;
     }
   },
 
   removeItem: (key: string) => {
-    try {
-      localStorage.removeItem(key);
-    } catch (e) {
-      console.error(`Error removing ${key}:`, e);
+    delete memoryCache[key];
+    idb.del(key).then(() => {
+      window.dispatchEvent(new StorageEvent('storage', {
+        key: key,
+        newValue: null
+      }));
+    }).catch(e => console.error(`Failed to remove ${key} from IDB`, e));
+    
+    if (currentWorkspaceId && key !== STORAGE_KEYS.DEST_IMAGES) {
+      deleteDoc(doc(db, `workspaces/${currentWorkspaceId}/storage`, key))
+        .catch(e => console.error(`Failed to delete ${key} from Firebase:`, e));
     }
   }
 };
-
-/**
- * If quota is exceeded, try to delete older or less critical data
- */
-function pruneAndRetry(key: string, value: string): boolean {
-  try {
-    // Priority 1: Clear non-essential log/stat data
-    const nonEssentialKeys = [
-      STORAGE_KEYS.MESSAGE_LOGS,
-      STORAGE_KEYS.DASHBOARD_STATS,
-      STORAGE_KEYS.TRANSACTIONS
-    ];
-    let freedNonEssential = false;
-    nonEssentialKeys.forEach(k => {
-      if (localStorage.getItem(k)) {
-        localStorage.removeItem(k);
-        freedNonEssential = true;
-      }
-    });
-    
-    if (freedNonEssential) {
-      try {
-        localStorage.setItem(key, value);
-        console.warn('Freed non-essential data and retried successfully.');
-        return true;
-      } catch (e) {
-        console.info('Still full after clearing non-essential data');
-      }
-    }
-
-    // Priority 2: Aggressively prune Destination Assets (typically the bulk)
-    const destImagesKey = STORAGE_KEYS.DEST_IMAGES;
-    const destImagesRaw = localStorage.getItem(destImagesKey);
-    if (destImagesRaw) {
-      console.warn('Aggressively pruning destination assets...');
-      // If we are trying to save destination images, we keep only the new one? 
-      // No, let's keep only 3 most recent globally if we are saving something else.
-      // If we ARE saving dest_images, this logic is tricky.
-      if (key === destImagesKey) {
-        try {
-          const newImages = JSON.parse(value);
-          if (Array.isArray(newImages)) {
-            // Keep only latest 10 if quota fails
-            const sliced = JSON.parse(JSON.stringify(newImages.slice(-10)));
-            localStorage.setItem(destImagesKey, JSON.stringify(sliced));
-            return true;
-          }
-        } catch (e) {
-          console.error('Failed to prune destination images:', e);
-        }
-      } else {
-        localStorage.removeItem(destImagesKey);
-        try {
-          localStorage.setItem(key, value);
-          return true;
-        } catch (e) {
-          console.info('Still full after removing destination images');
-        }
-      }
-    }
-
-    // Priority 3: Prune ALL versions from ALL trips in storage
-    const tripsKey = STORAGE_KEYS.TRIPS;
-    const tripsRaw = localStorage.getItem(tripsKey);
-    if (tripsRaw) {
-      console.warn('Pruning ALL trip versions and itinerary images globally...');
-      try {
-        let trips = JSON.parse(tripsRaw);
-        if (key === tripsKey) trips = JSON.parse(value);
-        
-        if (Array.isArray(trips)) {
-          const stripped = trips.map(t => ({
-            ...t,
-            versions: [],
-            itinerary: (t.itinerary || []).map((day: any) => ({
-              ...day,
-              images: [] 
-            }))
-          }));
-          localStorage.setItem(tripsKey, JSON.stringify(stripped));
-          
-          // If we weren't saving trips, try to save the original key now
-          if (key !== tripsKey) {
-            localStorage.setItem(key, value);
-          }
-          return true;
-        }
-      } catch (e) {
-        console.error('Failed to prune trips:', e);
-      }
-    }
-
-    // Priority 4: Clear Custom Templates
-    const templatesKey = STORAGE_KEYS.TEMPLATES;
-    if (localStorage.getItem(templatesKey)) {
-      console.warn('Clearing custom templates...');
-      localStorage.removeItem(templatesKey);
-      try {
-        localStorage.setItem(key, value);
-        return true;
-      } catch (e) {
-        console.info('Still full after clearing templates');
-      }
-    }
-
-    // Final Attempt: No-op or fail
-    try {
-      localStorage.setItem(key, value);
-      return true;
-    } catch (e) {
-      console.error('Final aggressive pruning failed to free enough space.');
-      if (typeof window !== 'undefined') {
-        alert('Browser storage is critically full even after cleaning. Please delete images or historical trips to proceed.');
-      }
-      return false;
-    }
-  } catch (e) {
-    console.error('Fatal error during pruning:', e);
-    return false;
-  }
-}

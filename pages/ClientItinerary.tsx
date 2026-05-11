@@ -41,7 +41,7 @@ import { tripService } from '../services/tripService';
 import { useAuth } from '../contexts/AuthContext';
 
 const ClientItinerary: React.FC = () => {
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
   const { id } = useParams();
   const navigate = useNavigate();
   const [trip, setTrip] = useState<Trip | null>(null);
@@ -331,12 +331,12 @@ const ClientItinerary: React.FC = () => {
 
             <div className="mt-20 flex flex-col items-center">
               <div className="flex items-center gap-6 p-6 rounded-2xl bg-[#F5F1E9] border border-[#C5A059]/10">
-                <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-white shadow-sm">
-                   <img src="https://picsum.photos/seed/concierge/100/100" alt="Concierge" />
+                <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-white shadow-sm p-1 bg-white">
+                   <img src={agencyConfig.logo || "https://picsum.photos/seed/concierge/100/100"} alt="Agency Logo" className="w-full h-full object-contain" />
                 </div>
                 <div>
-                  <p className="text-[10px] uppercase font-bold tracking-widest text-[#C5A059]">Assigned Concierge</p>
-                  <p className="font-serif italic text-lg">{trip.assignedSalesperson || 'Executive Partner'}</p>
+                  <p className="text-[10px] uppercase font-bold tracking-widest text-[#C5A059]">Your Travel Partner</p>
+                  <p className="font-serif text-lg">{userProfile?.name || user?.displayName || trip.assignedSalesperson || agencyConfig.name}</p>
                 </div>
                 <div className="h-8 w-px bg-[#C5A059]/20 ml-4 hidden sm:block"/>
                 <div className="hidden sm:flex gap-4 ml-4">
@@ -678,7 +678,7 @@ const ClientItinerary: React.FC = () => {
                    Accept Proposal <ArrowRight size={18} className="group-hover:translate-x-2 transition-transform" />
                  </button>
                  <a 
-                   href={`https://wa.me/${agencyConfig.phone.replace(/[^0-9]/g, '')}?text=Hi! I have reviewed the luxury proposal for ${trip.tripName}. Can we discuss further?`}
+                   href={`https://wa.me/${(agencyConfig.phone || '').replace(/[^0-9]/g, '')}?text=Hi! I have reviewed the luxury proposal for ${trip.tripName}. Can we discuss further?`}
                    target="_blank" rel="noreferrer"
                    className="w-full sm:w-auto bg-white border-2 border-[#0F1115] text-[#0F1115] px-12 py-5 rounded-full font-bold flex items-center justify-center gap-3 hover:bg-[#F5F1E9] transition-all text-sm uppercase tracking-widest shadow-sm"
                  >

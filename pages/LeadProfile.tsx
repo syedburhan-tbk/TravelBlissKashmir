@@ -193,7 +193,7 @@ const LeadProfile: React.FC = () => {
       type,
       timestamp: new Date().toISOString(),
       content,
-      author: 'Adil Bakshi'
+      author: 'Executive Partner'
     };
     // Fix: Explicitly type updatedLead as Lead to prevent inference errors when reassigning from recordActivity
     let updatedLead: Lead = { ...lead, communicationLogs: [log, ...lead.communicationLogs] };

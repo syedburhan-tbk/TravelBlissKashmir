@@ -51,7 +51,7 @@ const NewLead: React.FC = () => {
     const newLead: Lead = {
       id: `l-${Date.now()}`,
       ...formData,
-      assignedTo: formData.assignedTo || 'Adil Bakshi',
+      assignedTo: formData.assignedTo || 'Executive Partner',
       stage: LeadStage.NEW,
       communicationLogs: [],
       followUps: [],

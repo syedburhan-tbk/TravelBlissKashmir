@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { Workspace, WorkspaceMember, WorkspaceRole } from '../types';
 import { workspaceService } from '../services/workspaceService';
 import { useAuth } from './AuthContext';
+import { setWorkspaceIdForSync } from '../utils/storage';
 
 interface WorkspaceContextType {
   workspaces: Workspace[];
@@ -21,6 +22,14 @@ export const WorkspaceProvider: React.FC<{ children: ReactNode }> = ({ children 
   const [currentWorkspace, setCurrentWorkspace] = useState<Workspace | null>(null);
   const [currentMemberData, setCurrentMemberData] = useState<WorkspaceMember | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    if (currentWorkspace) {
+      setWorkspaceIdForSync(currentWorkspace.id);
+    } else {
+      setWorkspaceIdForSync(null);
+    }
+  }, [currentWorkspace]);
 
   useEffect(() => {
     let isMounted = true;

@@ -7,10 +7,12 @@ import { MOCK_TEMPLATES, MOCK_TRIPS, BRAND_CONFIG, TripTemplate, DEFAULT_INCLUSI
 
 import { populateItineraryWithRandomImages } from '../services/assetService';
 import { safeLocalStorage, STORAGE_KEYS } from '../utils/storage';
+import { useAuth } from '../contexts/AuthContext';
 
 const NewTrip: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user, userProfile } = useAuth();
   const [step, setStep] = useState(1);
   const [allTemplates, setAllTemplates] = useState<TripTemplate[]>(() => {
     const savedTemplatesRaw = safeLocalStorage.getItem(STORAGE_KEYS.TEMPLATES);
@@ -192,7 +194,7 @@ const NewTrip: React.FC = () => {
         endDate: formData.endDate,
         pax: formData.pax,
         budgetRange: 'TBD',
-        assignedSalesperson: 'Adil Bakshi',
+        assignedSalesperson: userProfile?.name || user?.displayName || user?.email || 'Executive Partner',
         status: TripStatus.LEAD,
         marginPercentage: selectedTemplate?.baseMargin || BRAND_CONFIG.defaultMargin,
         addOnIds: [],

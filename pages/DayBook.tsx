@@ -149,7 +149,7 @@ const DayBook: React.FC = () => {
       ...formData,
       id: editingId || generateTxId(),
       date: selectedDate,
-      author: formData.author || 'Adil Bakshi',
+      author: formData.author || 'Executive Partner',
       type: formData.type as TransactionType,
       category: formData.category || 'Misc',
       amount: formData.amount || 0,

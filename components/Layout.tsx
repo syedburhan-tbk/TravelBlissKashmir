@@ -35,6 +35,7 @@ import {
 import { Lead, LeadStage, UserRole, TeamMember, Trip, TripStatus } from '../types';
 import { MOCK_LEADS, DEFAULT_PERSONAS, BRAND_CONFIG, MOCK_TRIPS } from '../constants';
 import { sendSimulatedMessage, DEFAULT_TEMPLATES, saveMessageLog } from '../services/messagingService';
+import { safeLocalStorage, STORAGE_KEYS } from '../utils/storage';
 
 const SidebarItem = ({ icon: Icon, label, path, active, roleColor, badge }: { icon: any, label: string, path: string, active: boolean, roleColor: string, badge?: number }) => (
   <Link 
@@ -65,7 +66,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [currentUser, setCurrentUser] = useState<TeamMember>(() => {
     if (userProfile) return userProfile;
-    const savedMembers = localStorage.getItem('et_team_members');
+    const savedMembers = safeLocalStorage.getItem(STORAGE_KEYS.TEAM_MEMBERS);
     let members: TeamMember[] = DEFAULT_PERSONAS;
     try {
       if (savedMembers) {
@@ -75,11 +76,11 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     } catch (e) {
       console.error('Failed to parse members for initial state:', e);
     }
-    const activeId = localStorage.getItem('et_active_member_id');
+    const activeId = safeLocalStorage.getItem('et_active_member_id');
     return members.find(m => m.id === activeId) || members[0] || DEFAULT_PERSONAS[0];
   });
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>(() => {
-    const savedMembers = localStorage.getItem('et_team_members');
+    const savedMembers = safeLocalStorage.getItem(STORAGE_KEYS.TEAM_MEMBERS);
     try {
       if (savedMembers) {
         const parsed = JSON.parse(savedMembers);
@@ -91,7 +92,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     return DEFAULT_PERSONAS;
   });
   const [agencyConfig, setAgencyConfig] = useState(() => {
-    const savedConfig = localStorage.getItem('et_brand_config');
+    const savedConfig = safeLocalStorage.getItem(STORAGE_KEYS.BRAND_CONFIG);
     try {
       if (savedConfig) return JSON.parse(savedConfig);
     } catch (e) {
@@ -101,7 +102,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   });
   const [alerts] = useState<{ id: string, title: string, desc: string, type: 'danger' | 'warning' | 'info' | 'success', leadId: string }[]>([]);
   const [ongoingCount, setOngoingCount] = useState(() => {
-    const savedTrips = localStorage.getItem('et_trips');
+    const savedTrips = safeLocalStorage.getItem(STORAGE_KEYS.TRIPS);
     let tripsList: Trip[] = MOCK_TRIPS;
     try {
       if (savedTrips) {
@@ -124,7 +125,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   useEffect(() => {
     const refreshData = () => {
-      const savedMembers = localStorage.getItem('et_team_members');
+      const savedMembers = safeLocalStorage.getItem(STORAGE_KEYS.TEAM_MEMBERS);
       let members: TeamMember[] = DEFAULT_PERSONAS;
       try {
         if (savedMembers) {
@@ -137,7 +138,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       setTeamMembers(members);
 
       if (!userProfile) {
-        const activeMemberId = localStorage.getItem('et_active_member_id');
+        const activeMemberId = safeLocalStorage.getItem('et_active_member_id');
         const found = members.find(m => m.id === activeMemberId);
         
         if (found) {
@@ -145,11 +146,11 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         } else {
           const firstAvailable = members.length > 0 ? members[0] : DEFAULT_PERSONAS[0];
           setCurrentUser(firstAvailable);
-          localStorage.setItem('et_active_member_id', firstAvailable.id);
+          safeLocalStorage.setItem('et_active_member_id', firstAvailable.id);
         }
       }
 
-      const savedConfig = localStorage.getItem('et_brand_config');
+      const savedConfig = safeLocalStorage.getItem(STORAGE_KEYS.BRAND_CONFIG);
       if (savedConfig) {
         try {
           const parsed = JSON.parse(savedConfig);
@@ -159,7 +160,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         }
       }
 
-      const savedTrips = localStorage.getItem('et_trips');
+      const savedTrips = safeLocalStorage.getItem(STORAGE_KEYS.TRIPS);
       let trips: Trip[] = MOCK_TRIPS;
       try {
         if (savedTrips) {
@@ -193,10 +194,11 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   }, [userProfile]);
 
   const switchPersona = (member: TeamMember) => {
-    localStorage.setItem('et_active_member_id', member.id);
+    safeLocalStorage.setItem('et_active_member_id', member.id);
     window.dispatchEvent(new Event('user-profile-updated'));
     setShowProfileMenu(false);
   };
+
 
   const isAllowed = (path: string) => {
     if (currentUser.role === UserRole.ADMIN) return true;
@@ -337,11 +339,11 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                       className="w-full flex items-center gap-3 p-3 rounded-2xl transition-all hover:bg-slate-50"
                     >
                       <div className="bg-blue-100 text-blue-600 p-2 rounded-xl">
-                        <Users size={18} />
+                        <UserIcon size={18} />
                       </div>
                       <div className="text-left">
-                        <p className="text-sm font-bold text-slate-700">Team Workspace</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Manage members</p>
+                        <p className="text-sm font-bold text-slate-700">My Profile</p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Personal Settings</p>
                       </div>
                     </Link>
                   </div>
