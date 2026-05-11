@@ -9,15 +9,7 @@ service cloud.firestore {
 
     // --- HELPER FUNCTIONS ---
     function isSignedIn() {
-      return request.auth != null;
-    }
-
-    function isAdmin() {
-      return isSignedIn() && (
-        (request.auth.token.email.lower() == 'syd.burhan.smb@gmail.com') ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN')
-      );
+      return request.auth != null && request.auth.uid != null;
     }
 
     function isOwner(userId) {
@@ -25,7 +17,7 @@ service cloud.firestore {
     }
 
     function isValidId(id) {
-      return id is string && id.size() > 0 && id.size() <= 128;
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
     function incoming() {
@@ -35,25 +27,107 @@ service cloud.firestore {
     function existing() {
       return resource.data;
     }
-
-    // --- COLLECTIONS ---
-
-    match /users/{userId} {
-      allow read: if isOwner(userId) || isAdmin();
-      allow create: if isSignedIn() && (request.auth.uid == userId || isAdmin());
-      allow update: if isOwner(userId) || isAdmin();
-      allow delete: if isAdmin();
+    
+    // --- WORKSPACE RBAC HELPERS ---
+    
+    function getWorkspaceMember(workspaceId, userId) {
+      return get(/databases/$(database)/documents/workspaces/$(workspaceId)/members/$(userId));
+    }
+    
+    function getWorkspaceMemberAfter(workspaceId, userId) {
+      return getAfter(/databases/$(database)/documents/workspaces/$(workspaceId)/members/$(userId));
+    }
+    
+    function isWorkspaceMember(workspaceId) {
+      return isSignedIn() && exists(/databases/$(database)/documents/workspaces/$(workspaceId)/members/$(request.auth.uid))
+        && getWorkspaceMember(workspaceId, request.auth.uid).data.status == 'ACTIVE';
     }
 
+    function getWorkspaceRole(workspaceId) {
+      return getWorkspaceMember(workspaceId, request.auth.uid).data.role;
+    }
+
+    function hasWorkspaceRole(workspaceId, allowedRoles) {
+      return isWorkspaceMember(workspaceId) && (getWorkspaceRole(workspaceId) in allowedRoles);
+    }
+    
+    function isWorkspaceAdmin(workspaceId) {
+      return hasWorkspaceRole(workspaceId, ['SUPER_ADMIN', 'ADMIN']);
+    }
+
+    // --- COLLECTIONS ---
+    match /{path=**}/members/{memberId} {
+      allow read: if isSignedIn() && (memberId == request.auth.uid || resource.data.email == request.auth.token.email);
+    }
+
+    match /mail/{mailId} {
+      allow create: if isSignedIn();
+      allow read, update, delete: if false; // System only
+    }
+
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if false; // Users shouldn't be listed globally
+      allow create: if isOwner(userId) && incoming().uid == request.auth.uid && incoming().keys().hasAll(['uid', 'email', 'name', 'createdAt']);
+      allow update: if isOwner(userId); // Simplified update for now
+    }
+
+    match /workspaces/{workspaceId} {
+      allow get: if isWorkspaceMember(workspaceId);
+      allow list: if false; // Must query specifically by known ID
+      
+      // Only system/admins or new bootstrap could create
+      allow create: if isSignedIn() && incoming().ownerId == request.auth.uid;
+      allow update: if isWorkspaceAdmin(workspaceId);
+      allow delete: if hasWorkspaceRole(workspaceId, ['SUPER_ADMIN']);
+      
+      match /members/{memberId} {
+        allow get: if isWorkspaceMember(workspaceId) || memberId == request.auth.uid || (
+          memberId == 'pending_' + request.auth.token.email
+        );
+        allow list: if isWorkspaceMember(workspaceId) || memberId == request.auth.uid;
+        
+        // Only workspace admins can manage members, OR it's a bootstrap creation, OR accepting invite
+        allow create: if isWorkspaceAdmin(workspaceId) || (
+          memberId == request.auth.uid && incoming().role == 'SUPER_ADMIN'
+        ) || (
+          memberId == request.auth.uid && incoming().email == request.auth.token.email
+        );
+        
+        allow update: if isWorkspaceAdmin(workspaceId);
+        
+        allow delete: if isWorkspaceAdmin(workspaceId) || (
+          memberId == 'pending_' + request.auth.token.email && existing().email == request.auth.token.email
+        );
+      }
+      
+      match /trips/{tripId} {
+        allow get: if true; // Public retrieval for shared links; could restrict to member or public flag.
+        // List: requires being a member
+        allow list: if isWorkspaceMember(workspaceId);
+        
+        // Writes: Workspace members with correct roles
+        allow create: if hasWorkspaceRole(workspaceId, ['SUPER_ADMIN', 'ADMIN', 'SALES_EXECUTIVE']) 
+          && incoming().workspaceId == workspaceId;
+          
+        allow update: if hasWorkspaceRole(workspaceId, ['SUPER_ADMIN', 'ADMIN', 'SALES_EXECUTIVE', 'OPERATIONS_STAFF']);
+        
+        allow delete: if hasWorkspaceRole(workspaceId, ['SUPER_ADMIN', 'ADMIN', 'SALES_EXECUTIVE']);
+      }
+      
+      match /activity_logs/{logId} {
+        allow get, list: if isWorkspaceAdmin(workspaceId);
+        // Anyone in workspace can write a log
+        allow create: if isWorkspaceMember(workspaceId) && incoming().userId == request.auth.uid;
+        allow update, delete: if false; // Immutable logs
+      }
+    }
+    
+    // Legacy support for migrations, can be removed eventually
     match /trips/{tripId} {
-      // Allow single document retrieval for shared proposal links publicly
-      allow get: if true;
-      
-      // Restricted list access
-      allow list: if isAdmin();
-      
-      // Writes restricted to admin
-      allow create, update, delete: if isAdmin();
+        allow get: if true;
+        allow list: if true;
+        allow write: if true;
     }
   }
 }

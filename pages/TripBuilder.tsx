@@ -108,9 +108,9 @@ const TripBuilder: React.FC = () => {
       const paxCount = foundTrip.pax || 2;
       let matchedVehicle;
       if (paxCount <= 3) {
-        matchedVehicle = mVehicles.find(v => v.type?.toLowerCase().includes('sedan') || v.brand?.toLowerCase().includes('sedan') || v.brand?.toLowerCase().includes('etios'));
+        matchedVehicle = mVehicles.find(v => (v.type || '').toLowerCase().includes('sedan') || (v.brand || '').toLowerCase().includes('sedan') || (v.brand || '').toLowerCase().includes('etios'));
       } else if (paxCount <= 7) {
-        matchedVehicle = mVehicles.find(v => v.brand?.toLowerCase().includes('innova') || v.brand?.toLowerCase().includes('ertiga') || v.type?.toLowerCase().includes('suv'));
+        matchedVehicle = mVehicles.find(v => (v.brand || '').toLowerCase().includes('innova') || (v.brand || '').toLowerCase().includes('ertiga') || (v.type || '').toLowerCase().includes('suv'));
       }
       if (!matchedVehicle) matchedVehicle = mVehicles[0];
       const defaultVehicleId = matchedVehicle ? matchedVehicle.id : '';
@@ -547,7 +547,7 @@ const TripBuilder: React.FC = () => {
         trip.itinerary.forEach(day => {
           if (day.vehicleId) {
             const vehicle = masterVehicles.find(v => v.id === day.vehicleId);
-            if (vehicle && vehicle.type.toLowerCase().includes('traveler')) {
+            if (vehicle && (vehicle.type || '').toLowerCase().includes('traveler')) {
               hasTraveler = true;
             }
           }
@@ -1626,7 +1626,7 @@ const TripBuilder: React.FC = () => {
                             </div>
                             <div className="flex justify-between items-center">
                               <span className={`text-[9px] font-bold uppercase tracking-widest ${isSelected ? 'text-blue-100' : 'text-slate-400'}`}>{ao.isPerPax ? 'Per Guest' : 'Flat'}</span>
-                              <span className={`text-sm font-black ${isSelected ? 'text-white' : 'text-blue-600'}`}>₹{ao.cost.toLocaleString()}</span>
+                              <span className={`text-sm font-black ${isSelected ? 'text-white' : 'text-blue-600'}`}>₹{(ao.cost || 0).toLocaleString()}</span>
                             </div>
                         </button>
                       );

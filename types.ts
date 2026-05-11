@@ -1,4 +1,57 @@
 
+export enum WorkspaceRole {
+  SUPER_ADMIN = 'SUPER_ADMIN',
+  ADMIN = 'ADMIN',
+  SALES_EXECUTIVE = 'SALES_EXECUTIVE',
+  OPERATIONS_STAFF = 'OPERATIONS_STAFF',
+  VIEWER = 'VIEWER'
+}
+
+export enum WorkspaceMemberStatus {
+  ACTIVE = 'ACTIVE',
+  PENDING = 'PENDING',
+  SUSPENDED = 'SUSPENDED'
+}
+
+export interface Workspace {
+  id: string;
+  name: string;
+  ownerId: string;
+  createdAt: string;
+  logo?: string;
+  settings?: any; // To be expanded later
+}
+
+export interface WorkspaceMember {
+  userId: string;
+  email: string;
+  name: string;
+  role: WorkspaceRole;
+  status: WorkspaceMemberStatus;
+  branch?: string;
+  joinedAt: string;
+  lastActive?: string;
+  avatar?: string;
+}
+
+export interface GlobalUser {
+  uid: string;
+  email: string;
+  name: string;
+  workspaces: string[];
+  createdAt: string;
+}
+
+export interface ActivityLog {
+  id: string;
+  userId: string;
+  workspaceId: string;
+  action: string;
+  resource: string;
+  timestamp: string;
+  ip?: string;
+}
+
 export enum UserRole {
   ADMIN = 'ADMIN',
   SALES = 'SALES',
@@ -284,6 +337,9 @@ export interface ItineraryGenerationInput {
 
 export interface Trip {
   id: string;
+  workspaceId?: string; // Optional for backward compatibility during migration
+  createdBy?: string;
+  assignedTo?: string[];
   leadId: string;
   client: {
     name: string;

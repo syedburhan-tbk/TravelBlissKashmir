@@ -2,6 +2,7 @@
 import React from 'react';
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
+import { WorkspaceProvider } from './contexts/WorkspaceContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import Login from './pages/Login';
 import SignUp from './pages/SignUp';
@@ -28,18 +29,21 @@ import ProfileSettings from './pages/ProfileSettings';
 import MasterTerms from './pages/MasterTerms';
 import OngoingTrips from './pages/OngoingTrips';
 import DayBook from './pages/DayBook';
+import UserManagement from './pages/Admin/UserManagement';
 
 const App: React.FC = () => {
   return (
     <AuthProvider>
-      <Router>
-        <Routes>
+      <WorkspaceProvider>
+        <Router>
+          <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<SignUp />} />
           <Route path="/quotation/:id" element={<ClientItinerary />} />
           
           <Route element={<ProtectedRoute />}>
             <Route path="/" element={<Layout><Dashboard /></Layout>} />
+            <Route path="/admin/users" element={<Layout><UserManagement /></Layout>} />
             <Route path="/pipeline" element={<Layout><Pipeline /></Layout>} />
             <Route path="/leads" element={<Layout><LeadList /></Layout>} />
             <Route path="/leads/new" element={<Layout><NewLead /></Layout>} />
@@ -69,8 +73,9 @@ const App: React.FC = () => {
           </Route>
           
           <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </Router>
+          </Routes>
+        </Router>
+      </WorkspaceProvider>
     </AuthProvider>
   );
 };

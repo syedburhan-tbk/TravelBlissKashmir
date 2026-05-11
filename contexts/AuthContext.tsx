@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, onAuthStateChanged, signInWithPopup, signOut as firebaseSignOut, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { getDocs, query, collectionGroup, where, writeBatch, doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, googleProvider, db } from '../lib/firebase';
 import { TeamMember, UserRole } from '../types';
 
@@ -86,8 +86,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else {
         // Create default profile
         const isSuperAdmin = email?.toLowerCase() === 'syd.burhan.smb@gmail.com';
-        const newProfile: TeamMember = {
+        const newProfile: TeamMember & { uid: string, createdAt: string } = {
           id: uid,
+          uid: uid,
           name: displayName || email?.split('@')[0] || 'User',
           role: isSuperAdmin ? UserRole.ADMIN : UserRole.SALES,
           title: isSuperAdmin ? 'CEO & Founder' : 'Travel Expert',
@@ -96,7 +97,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           phone: '',
           location: 'Srinagar',
           color: 'bg-blue-100 text-blue-700',
-          isApproved: isSuperAdmin
+          isApproved: isSuperAdmin,
+          createdAt: new Date().toISOString()
         };
         try {
           await setDoc(docRef, newProfile);
@@ -106,6 +108,90 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         setUserProfile(newProfile);
       }
+
+      // Automatically accept any pending workspace invites for this email
+      if (email) {
+        try {
+          // Check if there are explicit URL parameters telling us which workspace they were invited to
+          let explicitlyInvitedWorkspaceId: string | null = null;
+          const hashParams = new URLSearchParams(window.location.hash.split('?')[1] || '');
+          if (hashParams.get('workspace')) {
+             explicitlyInvitedWorkspaceId = hashParams.get('workspace');
+          }
+
+          const pendingId = "pending_" + email.toLowerCase();
+          
+          const memberDocsToProcess: any[] = [];
+          
+          if (explicitlyInvitedWorkspaceId) {
+             const docSnap = await getDoc(doc(db, `workspaces/${explicitlyInvitedWorkspaceId}/members/${pendingId}`));
+             if (docSnap.exists() && docSnap.data().status === 'PENDING') {
+                memberDocsToProcess.push({
+                   ref: docSnap.ref,
+                   data: docSnap.data(),
+                   workspaceId: explicitlyInvitedWorkspaceId
+                });
+             }
+          }
+
+          // We execute this even if memberDocsToProcess length is 0 in case there are multiple, but collectionGroup query might fail without an index.
+          // By adding this try/catch specifically around the collectionGroup, it won't break the explicit invite above.
+          try {
+             const membersRef = collectionGroup(db, 'members');
+             const q = query(membersRef, where('email', '==', email));
+             const snapshot = await getDocs(q);
+             snapshot.forEach(memberDoc => {
+               const memberData = memberDoc.data();
+               if (memberData.status !== 'PENDING') return;
+               const parentPath = memberDoc.ref.parent.parent;
+               if (parentPath && !memberDocsToProcess.find(m => m.workspaceId === parentPath.id)) {
+                 memberDocsToProcess.push({
+                    ref: memberDoc.ref,
+                    data: memberData,
+                    workspaceId: parentPath.id
+                 });
+               }
+             });
+          } catch(e) {
+             console.log("Collection group query for pending invites failed (likely needs index):", e);
+          }
+          
+          if (memberDocsToProcess.length > 0) {
+            const batch = writeBatch(db);
+            const workspacesToJoin: string[] = [];
+            
+            memberDocsToProcess.forEach(memberDoc => {
+               workspacesToJoin.push(memberDoc.workspaceId);
+               // Delete pending
+               batch.delete(memberDoc.ref);
+               // Create actual member record
+               const newMemberRef = doc(db, `workspaces/${memberDoc.workspaceId}/members`, uid);
+               batch.set(newMemberRef, {
+                 ...memberDoc.data,
+                 userId: uid,
+                 status: 'ACTIVE',
+                 joinedAt: new Date().toISOString()
+               });
+            });
+
+            // Update user profile workspaces
+            const globalUserRef = doc(db, 'users', uid);
+            const gSnap = await getDoc(globalUserRef);
+            if (gSnap.exists()) {
+               const gData = gSnap.data();
+               const existingWs = gData.workspaces || [];
+               batch.update(globalUserRef, {
+                  workspaces: [...new Set([...existingWs, ...workspacesToJoin])]
+               });
+            }
+
+            await batch.commit();
+          }
+        } catch (e) {
+          console.error("Failed to process pending invites", e);
+        }
+      }
+
     } catch (error) {
       console.error("Error in fetchProfile flow:", error);
     }

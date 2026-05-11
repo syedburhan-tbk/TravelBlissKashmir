@@ -66,8 +66,8 @@ const Activities: React.FC = () => {
 
   const filteredActivities = useMemo(() => {
     return allActivities.filter(a => {
-      const matchesSearch = a.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                           (a.location?.toLowerCase().includes(searchTerm.toLowerCase()));
+      const matchesSearch = (a.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+                           ((a.location || '').toLowerCase().includes(searchTerm.toLowerCase()));
       const matchesCost = a.costPerPax <= parseInt(maxCost);
       const matchesCategory = categoryFilter === 'All' || a.category === categoryFilter;
       return matchesSearch && matchesCost && matchesCategory;

@@ -72,28 +72,6 @@ const ProfileSettings: React.FC = () => {
     color: 'bg-emerald-600'
   }));
 
-  const fetchMembers = async () => {
-    try {
-      setIsLoadingMembers(true);
-      const querySnapshot = await getDocs(collection(db, "users"));
-      const usersData: TeamMember[] = [];
-      querySnapshot.forEach((doc) => {
-        usersData.push(doc.data() as TeamMember);
-      });
-      setMembers(usersData);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.LIST, "users");
-    } finally {
-      setIsLoadingMembers(false);
-    }
-  };
-
-  useEffect(() => {
-    if (userProfile && userProfile.role === UserRole.ADMIN) {
-      Promise.resolve().then(() => fetchMembers());
-    }
-  }, [userProfile]);
-
   if (userProfile && userProfile.role !== UserRole.ADMIN) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4 animate-in fade-in zoom-in duration-500">

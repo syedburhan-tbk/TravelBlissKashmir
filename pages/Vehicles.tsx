@@ -50,8 +50,8 @@ const Vehicles: React.FC = () => {
 
   const filteredVehicles = useMemo(() => {
     return allVehicles.filter(v => {
-      const matchesSearch = v.type.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                           (v.brand?.toLowerCase().includes(searchTerm.toLowerCase()));
+      const matchesSearch = (v.type || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+                           ((v.brand || '').toLowerCase().includes(searchTerm.toLowerCase()));
       const matchesCapacity = capacityFilter === 'All' || v.capacity >= parseInt(capacityFilter);
       return matchesSearch && matchesCapacity;
     });

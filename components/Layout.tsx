@@ -258,6 +258,13 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
               <SidebarItem icon={ListChecks} label="Master Terms" path="/master-terms" active={location.pathname === '/master-terms'} roleColor={currentUser.color} />
             </>
           )}
+
+          {currentUser.role === UserRole.ADMIN && (
+            <>
+              <SidebarHeader label="Administrator" />
+              <SidebarItem icon={ShieldCheck} label="User Roles & Access" path="/admin/users" active={location.pathname === '/admin/users'} roleColor={currentUser.color} />
+            </>
+          )}
           
           {currentUser.role === UserRole.ADMIN && (
             <>

@@ -35,8 +35,8 @@ const AddOns: React.FC = () => {
 
   const filteredAddOns = useMemo(() => {
     return allAddOns.filter(a => 
-      a.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      a.description?.toLowerCase().includes(searchTerm.toLowerCase())
+      (a.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+      (a.description || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [allAddOns, searchTerm]);
 
@@ -133,7 +133,7 @@ const AddOns: React.FC = () => {
                 <span className="text-[9px] font-black uppercase text-slate-400">{addon.isPerPax ? 'Per Person' : 'Fixed Cost'}</span>
                 <div className="text-lg font-black text-slate-900 flex items-center gap-0.5">
                   <IndianRupee size={16} />
-                  {addon.cost.toLocaleString()}
+                  {(addon.cost || 0).toLocaleString()}
                 </div>
               </div>
             </div>

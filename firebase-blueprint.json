@@ -1,42 +1,100 @@
 {
   "entities": {
     "Trip": {
-      "title": "Trip",
-      "description": "A curated travel itinerary for a lead.",
+      "title": "Trip / Itinerary",
+      "description": "A curated travel itinerary in a workspace.",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
+        "workspaceId": { "type": "string" },
         "tripName": { "type": "string" },
-        "leadId": { "type": "string" },
+        "createdBy": { "type": "string" },
+        "assignedTo": { "type": "array" },
+        "status": { "type": "string", "enum": ["QUOTATION", "CONFIRMED", "ONGOING", "COMPLETED", "CANCELLED"] },
         "client": { "type": "object" },
         "itinerary": { "type": "array" },
         "pax": { "type": "number" },
-        "startDate": { "type": "string", "format": "date" },
-        "status": { "type": "string", "enum": ["QUOTATION", "CONFIRMED", "ONGOING", "COMPLETED", "CANCELLED"] }
+        "startDate": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
       },
-      "required": ["id", "tripName", "leadId", "status"]
+      "required": ["id", "workspaceId", "tripName", "createdBy", "status"]
     },
     "User": {
-      "title": "User Profile",
-      "description": "System user with role-based access.",
+      "title": "Global User Profile",
+      "description": "Global user data containing references to their workspaces.",
       "type": "object",
       "properties": {
         "uid": { "type": "string" },
         "email": { "type": "string", "format": "email" },
-        "role": { "type": "string", "enum": ["ADMIN", "USER"] },
-        "name": { "type": "string" }
+        "name": { "type": "string" },
+        "workspaces": { "type": "array", "description": "Array of workspace IDs the user belongs to" },
+        "createdAt": { "type": "string" }
       },
-      "required": ["uid", "email", "role"]
+      "required": ["uid", "email", "name", "createdAt"]
+    },
+    "Workspace": {
+      "title": "Workspace",
+      "description": "A team workspace holding its own data.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "name", "ownerId", "createdAt"]
+    },
+    "WorkspaceMember": {
+      "title": "Workspace Member",
+      "description": "A user's role and status within a workspace.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "name": { "type": "string" },
+        "role": { "type": "string", "enum": ["SUPER_ADMIN", "ADMIN", "SALES_EXECUTIVE", "OPERATIONS_STAFF", "VIEWER"] },
+        "status": { "type": "string", "enum": ["ACTIVE", "PENDING", "SUSPENDED"] },
+        "branch": { "type": "string" },
+        "joinedAt": { "type": "string" },
+        "lastActive": { "type": "string" }
+      },
+      "required": ["userId", "email", "role", "status", "joinedAt"]
+    },
+    "ActivityLog": {
+      "title": "Activity Log",
+      "description": "Audit trails for actions within a workspace.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "action": { "type": "string" },
+        "resource": { "type": "string" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["id", "userId", "action", "timestamp"]
     }
   },
   "firestore": {
-    "trips/{tripId}": {
-      "schema": "Trip",
-      "description": "Collection of all travel proposals and active trips."
-    },
     "users/{userId}": {
       "schema": "User",
-      "description": "User profiles and metadata."
+      "description": "Global user profiles."
+    },
+    "workspaces/{workspaceId}": {
+      "schema": "Workspace",
+      "description": "Workspaces representing agencies/companies."
+    },
+    "workspaces/{workspaceId}/members/{userId}": {
+      "schema": "WorkspaceMember",
+      "description": "Subcollection mapping users to roles within a workspace."
+    },
+    "workspaces/{workspaceId}/trips/{tripId}": {
+      "schema": "Trip",
+      "description": "Trips scoped to a workspace."
+    },
+    "workspaces/{workspaceId}/activity_logs/{logId}": {
+      "schema": "ActivityLog",
+      "description": "System activity logs for the workspace."
     }
   }
 }

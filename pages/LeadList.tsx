@@ -95,9 +95,9 @@ const LeadList: React.FC = () => {
 
   const filteredLeads = useMemo(() => {
     return leads.filter(l => {
-      const matchesSearch = l.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                           l.phone.includes(searchTerm) ||
-                           l.email.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSearch = (l.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+                           (l.phone || '').includes(searchTerm) ||
+                           (l.email || '').toLowerCase().includes(searchTerm.toLowerCase());
       const matchesStage = stageFilter === 'All' || l.stage === stageFilter;
       const matchesScore = scoreFilter === 'All' || l.score === scoreFilter;
       return matchesSearch && matchesStage && matchesScore;

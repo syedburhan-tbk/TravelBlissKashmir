@@ -95,8 +95,8 @@ const Hotels: React.FC = () => {
 
   const filteredHotels = useMemo(() => {
     return allHotels.filter(hotel => {
-      const matchesSearch = hotel.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                           hotel.location.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSearch = (hotel.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+                           (hotel.location || '').toLowerCase().includes(searchTerm.toLowerCase());
       const matchesCategory = categoryFilter === 'All' || hotel.category === categoryFilter;
       return matchesSearch && matchesCategory;
     });

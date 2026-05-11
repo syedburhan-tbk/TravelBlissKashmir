@@ -54,8 +54,8 @@ const Pipeline: React.FC = () => {
 
   const filteredLeads = useMemo(() => {
     return leads.filter(l => 
-      l.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      l.phone.includes(searchTerm)
+      (l.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+      (l.phone || '').includes(searchTerm)
     );
   }, [leads, searchTerm]);
 

@@ -36,10 +36,10 @@ const TripList: React.FC = () => {
   const filteredTrips = trips.filter(trip => {
     const searchLower = searchTerm.toLowerCase();
     const matchesSearch = 
-      trip.client.name.toLowerCase().includes(searchLower) || 
-      trip.tripName.toLowerCase().includes(searchLower) ||
-      trip.client.phone.includes(searchTerm) ||
-      trip.client.email.toLowerCase().includes(searchLower);
+      (trip.client?.name || '').toLowerCase().includes(searchLower) || 
+      (trip.tripName || '').toLowerCase().includes(searchLower) ||
+      (trip.client?.phone || '').includes(searchTerm) ||
+      (trip.client?.email || '').toLowerCase().includes(searchLower);
 
     const matchesStatus = statusFilter === 'All' || trip.status === statusFilter;
     const matchesType = tripTypeFilter === 'All' || trip.tripType === tripTypeFilter;
